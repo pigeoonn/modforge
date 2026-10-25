@@ -1096,6 +1096,21 @@
   html.light .mod-count-chip { color: var(--acc-fg, var(--acc)); }
   html.light .health-ring b, html.light .health-ring { color: var(--ink); background: rgba(255,255,255,0.7); }
   html.light .game-card .cap, html.light .game-card .chips { color: #fff; }
+  /* fewer, bigger columns on a small screen held at arm's length, and nothing that keeps the GPU busy for show */
+  html.deck .store-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+  html.deck .lib-grid, html.deck .trend-grid, html.deck .home-recent, html.deck .shot-grid, html.deck .tool-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  html.deck *, html.deck *::before, html.deck *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  html.deck .aurora-bg, html.deck .btn-play, html.deck .pulse-dot { animation: none !important; }
+  /* the on-screen keyboard: a gamepad types on it */
+  .osk { position: fixed; left: 50%; bottom: 52px; transform: translateX(-50%); z-index: 210; width: min(960px, 96vw); display: none; flex-direction: column; gap: 8px; padding: 12px; border-radius: 16px; background: var(--n2, #161b26); border: 1px solid var(--line, rgba(255,255,255,0.12)); box-shadow: 0 18px 60px rgba(0,0,0,0.55); }
+  .osk.open { display: flex; }
+  .osk-line { min-height: 40px; padding: 8px 12px; border-radius: 10px; background: var(--n1, #0e121b); font-size: 18px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+  .osk-line i { display: inline-block; width: 2px; height: 1.1em; vertical-align: text-bottom; background: var(--acc); margin-left: 1px; }
+  .osk-line.hint { color: var(--text-muted); }
+  .osk-row { display: flex; gap: 6px; justify-content: center; }
+  .osk-key { flex: 1 1 0; min-width: 0; min-height: 52px; padding: 0 4px; border-radius: 10px; border: 1px solid var(--line, rgba(255,255,255,0.12)); background: var(--n3, #1d2431); color: inherit; font: inherit; font-size: 20px; cursor: pointer; }
+  .osk-key.wide { flex: 1.6 1 0; font-size: 15px; } .osk-key.space { flex: 5 1 0; } .osk-key.on { background: var(--acc); color: #0b0e14; }
+  .osk-key:focus { outline: 3px solid var(--acc); outline-offset: 2px; }
   html.light .deck-hints { background: rgba(255,255,255,0.95); }
   html.light .brand-title { -webkit-text-fill-color: var(--ink) !important; color: var(--ink) !important; }
   html.light .hero-stats .stat { background: rgba(255,255,255,0.82); }
@@ -1237,6 +1252,7 @@
 <div class="notes-panel" id="notesPanel" data-dyn></div>
 <div class="toast-pill" id="toastPill" data-dyn></div>
 <div class="deck-hints" id="deckHints" data-dyn></div>
+<div class="osk" id="osk" role="dialog" data-dyn></div>
 <div class="undo-toast" id="undoToast" data-dyn></div>
 
 <div class="drag-overlay" id="dragOverlay">
@@ -2280,6 +2296,7 @@
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (osk.open) { oskClose(false); e.preventDefault(); return; }
       if (document.getElementById('paletteBack').classList.contains('open')) closePalette();
       else if (document.getElementById('notesPanel').classList.contains('open') && !document.querySelector('.modal-backdrop.open')) toggleNotes();
       else closeTopModal();
@@ -3344,18 +3361,99 @@
 
   // ---------- Controller mode: the gamepad moves a focus ring and presses things ----------
   let deckOn = false;
+  // ---------- On-screen keyboard: the gamepad types into a text box ----------
+  const osk = { open: false, el: null, layer: 'abc', shift: false };
+  const OSK_ROWS = {
+    abc: [['1','2','3','4','5','6','7','8','9','0','#back'], ['q','w','e','r','t','y','u','i','o','p'], ['a','s','d','f','g','h','j','k','l','-'], ['#shift','z','x','c','v','b','n','m','.','/']],
+    cyr: [['1','2','3','4','5','6','7','8','9','0','#back'], ['й','ц','у','к','е','н','г','ш','щ','з','х','ї'], ['ф','і','ы','в','а','п','р','о','л','д','ж','є'], ['#shift','я','ч','с','м','и','т','ь','б','ю','ґ','э']],
+    sym: [['!','@','#','$','%','&','*','(',')','_','#back'], ['-','=','+','[',']','{','}',':',';','"'], ["'",',','.','?','/','\\','|','<','>','~'], ['`','^','№','€','£','¥','§','°','©','®']],
+  };
+  const OSK_TEXT = /^(text|search|password|url|tel)$/; // the kinds whose text can be edited by position
+  function oskWants(e) { return !!e && ((e.tagName === 'INPUT' && OSK_TEXT.test(e.type || 'text')) || e.tagName === 'TEXTAREA') && !e.readOnly && !e.disabled; }
+  function oskLine() {
+    const box = document.getElementById('oskLine');
+    if (!box || !osk.el) return;
+    const v = osk.el.type === 'password' ? '•'.repeat(osk.el.value.length) : osk.el.value;
+    const at = Math.min(osk.el.selectionStart == null ? v.length : osk.el.selectionStart, v.length);
+    box.classList.toggle('hint', !v);
+    box.innerHTML = v ? escapeHtml(v.slice(0, at)) + '<i></i>' + escapeHtml(v.slice(at)) : `<i></i>${escapeHtml(osk.el.placeholder || '')}`;
+  }
+  function oskDraw(fallback) {
+    const was = document.activeElement && document.activeElement.closest('#osk') ? document.activeElement.dataset.k : null;
+    const cyr = LANG === 'ru' || LANG === 'uk';
+    const layer = osk.layer === 'cyr' && !cyr ? 'abc' : osk.layer;
+    const label = k => k === '#back' ? '⌫' : k === '#shift' ? '⇧' : osk.shift && layer !== 'sym' ? k.toUpperCase() : k;
+    const name = { '#back': t('Delete'), '#shift': t('Shift'), '#sym': t('Symbols'), '#lang': t('Letters'), '#space': t('Space'), '#enter': t('Done'), '#close': t('Close') };
+    const btn = (k, cls = '') => `<button type="button" class="osk-key ${cls} ${k === '#shift' && osk.shift ? 'on' : ''}" data-k="${escapeHtml(k)}" aria-label="${escapeHtml(name[k] || label(k))}" ${k === '#shift' ? `aria-pressed="${osk.shift}"` : ''}>${escapeHtml(label(k))}</button>`;
+    const rows = OSK_ROWS[layer].map(r => `<div class="osk-row">${r.map(k => btn(k, k[0] === '#' ? 'wide' : '')).join('')}</div>`).join('');
+    const bottom = [btn('#sym', 'wide').replace('>#sym<', '>' + (layer === 'sym' ? 'abc' : '#+=') + '<'), cyr || layer === 'cyr' ? btn('#lang', 'wide').replace('>#lang<', '>' + (layer === 'cyr' ? 'ABC' : 'АБВ') + '<') : '', btn('#space', 'space').replace('>#space<', '>␣<'), btn('#close', 'wide').replace('>#close<', '>✕<'), btn('#enter', 'wide').replace('>#enter<', '>↵<')].join('');
+    const box = document.getElementById('osk');
+    box.setAttribute('aria-label', t('On-screen keyboard'));
+    box.innerHTML = `<div class="osk-line" id="oskLine"></div>${rows}<div class="osk-row">${bottom}</div>`;
+    box.querySelectorAll('.osk-key').forEach(b => b.onclick = () => oskKey(b.dataset.k));
+    oskLine();
+    // a redraw must not drop the thumb: stay on the same key, or on the one that was pressed
+    if (was !== null) oskRefocus(was) || oskRefocus(fallback);
+  }
+  function oskOpen(el) {
+    if (!deckOn || !oskWants(el)) return false;
+    osk.el = el; osk.open = true; osk.shift = false; osk.layer = 'abc';
+    document.getElementById('osk').classList.add('open');
+    oskDraw(); deckHints();
+    const first = document.querySelector('#osk .osk-key[data-k="q"]');
+    if (first) first.focus();
+    return true;
+  }
+  function oskClose(enter) {
+    if (!osk.open) return;
+    const el = osk.el;
+    osk.open = false; osk.el = null;
+    document.getElementById('osk').classList.remove('open');
+    deckHints();
+    if (el && document.contains(el)) {
+      el.focus();
+      if (enter) ['keydown', 'keypress', 'keyup'].forEach(type => el.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true })));
+    }
+  }
+  function oskKey(k) {
+    const el = osk.el;
+    if (!el) return;
+    if (k === '#close') return oskClose(false);
+    if (k === '#enter') return oskClose(true);
+    if (k === '#shift') { osk.shift = !osk.shift; return oskDraw('#shift'); }
+    if (k === '#sym') { osk.layer = osk.layer === 'sym' ? 'abc' : 'sym'; return oskDraw('#sym'); }
+    if (k === '#lang') { osk.layer = osk.layer === 'cyr' ? 'abc' : 'cyr'; return oskDraw('#lang'); }
+    const from = el.selectionStart == null ? el.value.length : el.selectionStart, to = el.selectionEnd == null ? from : el.selectionEnd;
+    if (k === '#back') { if (from !== to) el.setRangeText('', from, to, 'end'); else if (from > 0) el.setRangeText('', from - 1, from, 'end'); }
+    else {
+      const ch = k === '#space' ? ' ' : osk.shift && osk.layer !== 'sym' ? k.toUpperCase() : k;
+      el.setRangeText(ch, from, to, 'end');
+      if (osk.shift) { osk.shift = false; oskDraw(k); }
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    oskLine();
+  }
+  function oskRefocus(k) { const b = [...document.querySelectorAll('#osk .osk-key')].find(x => x.dataset.k === k); if (b) b.focus(); return !!b; }
   function deckSet(on) {
     if (on === deckOn) return;
     deckOn = on;
+    if (!on) oskClose(false);
     document.documentElement.classList.toggle('deck', on);
-    document.getElementById('deckHints').innerHTML = on
-      ? `<span><kbd class="a">A</kbd>${t('Select')}</span><span><kbd class="b">B</kbd>${t('Back')}</span><span><kbd class="x">X</kbd>${t('Play')}</span><span><kbd class="y">Y</kbd>${t('Search')}</span><span><kbd class="sh">LB</kbd><kbd class="sh">RB</kbd>${t('Tabs')}</span><span><kbd class="sh">☰</kbd>${t('Your games')}</span>`
-      : '';
+    deckHints();
     if (on && !gpTimer) gpTimer = requestAnimationFrame(gpLoop);
     if (on && (!document.activeElement || document.activeElement === document.body)) gpFirstFocus();
   }
+  function deckHints() {
+    const kb = (c, l) => `<kbd class="${c}">${l}</kbd>`;
+    const sh = l => `<kbd class="sh">${l}</kbd>`;
+    document.getElementById('deckHints').innerHTML = !deckOn ? ''
+      : osk.open
+        ? `<span>${kb('a', 'A')}${t('Type')}</span><span>${kb('b', 'B')}${t('Close')}</span><span>${kb('x', 'X')}${t('Delete')}</span><span>${kb('y', 'Y')}${t('Space')}</span><span>${sh('LB')}${t('Shift')}</span><span>${sh('☰')}${t('Done')}</span>`
+        : `<span>${kb('a', 'A')}${t('Select')}</span><span>${kb('b', 'B')}${t('Back')}</span><span>${kb('x', 'X')}${t('Play')}</span><span>${kb('y', 'Y')}${t('Search')}</span><span>${sh('LB')}${sh('RB')}${t('Tabs')}</span><span>${sh('☰')}${t('Your games')}</span>`;
+  }
   const GP_SEL = 'button:not([disabled]), a[onclick], input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex="-1"]), .game-item, .game-card, .tab, .pal-item';
   function gpScope() {
+    if (osk.open) return document.getElementById('osk');
     const open = [...document.querySelectorAll('.modal-backdrop.open, #paletteBack.open')].pop();
     return open || document;
   }
@@ -3400,14 +3498,24 @@
   function gpPress(btn) {
     rumble(0.25, 35);
     const cur = document.activeElement;
-    if (btn === 'a') { if (cur && cur !== document.body) cur.click(); else gpFirstFocus(); }
+    if (osk.open) {
+      if (btn === 'a') { if (cur && cur.classList.contains('osk-key')) cur.click(); }
+      else if (btn === 'b') oskClose(false);
+      else if (btn === 'x') oskKey('#back');
+      else if (btn === 'y') oskKey('#space');
+      else if (btn === 'lb') oskKey('#shift');
+      else if (btn === 'rb') oskKey('#sym');
+      else if (btn === 'start') oskClose(true);
+      return;
+    }
+    if (btn === 'a') { if (oskWants(cur)) oskOpen(cur); else if (cur && cur !== document.body) cur.click(); else gpFirstFocus(); }
     else if (btn === 'b') {
       if (document.getElementById('paletteBack').classList.contains('open')) closePalette();
       else if (document.querySelector('.modal-backdrop.open')) closeTopModal();
       else { const sel = document.querySelector('.game-item.selected, .game-card.selected'); if (sel) { sel.tabIndex = 0; sel.focus(); } }
     }
     else if (btn === 'x') playChecked();
-    else if (btn === 'y') openPalette();
+    else if (btn === 'y') { openPalette(); setTimeout(() => oskOpen(document.getElementById('paletteInput')), 60); }
     else if (btn === 'lb' || btn === 'rb') {
       const tabs = ['mods', 'tools', 'activity'];
       const now = tabs.indexOf(document.querySelector('.tab.active')?.dataset.tab || 'mods');
@@ -3781,7 +3889,10 @@
     renderDownloads();
   }
   function openDownloads() { document.getElementById('downloadsModal').classList.add('open'); pollDownloads(); }
-  setInterval(() => { if (!document.hidden) pollDownloads(); }, 1200);
+  // on a handheld, ask less often while nothing is happening (a battery lasts longer for it)
+  let calmTick = 0;
+  const calmNow = (every, busy) => !deckOn || busy || ++calmTick % every === 0;
+  setInterval(() => { if (!document.hidden && calmNow(4, (dlData && dlData.active > 0) || document.getElementById('downloadsModal').classList.contains('open'))) pollDownloads(); }, 1200);
 
   // ---------- What's new: shown once after an update ----------
   const NEWS_VERSION = '5.1.0';
@@ -5093,7 +5204,8 @@
   function fixLaunchOption() {
     if (confirm(t('Gantry will close Steam, set the launch option for your account and open Steam again. Continue?'))) ipcSend('/api/steam_launch_apply', { close_steam: true });
   }
-  setInterval(() => { if (!document.hidden) { refreshHealth(); refreshInbox(); } }, 10000);
+  let healthTick = 0;
+  setInterval(() => { if (!document.hidden && (!deckOn || ++healthTick % 3 === 0)) { refreshHealth(); refreshInbox(); } }, 10000);
 
   function renderVanillaBar() {
     const g = appState.games[appState.selected_idx];

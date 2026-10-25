@@ -234,6 +234,9 @@ pub struct RigConfigData {
     /// Bigger controls and gamepad navigation (also switched on by `rig --deck`).
     #[serde(default)]
     pub deck_mode: bool,
+    /// Turned off on purpose on a Steam Deck, where controller mode is on by itself.
+    #[serde(default)]
+    pub deck_declined: bool,
     /// Games the user pinned to the top of the list (appids).
     #[serde(default)]
     pub favorites: Vec<String>,

@@ -2,6 +2,11 @@
 
 ## Next
 
+- **Controller mode, finished for the Steam Deck.** It turns on by itself on a Deck (and stays off if you turn it
+  off). A on a text box opens an on-screen keyboard (letters, symbols, Cyrillic for Russian and Ukrainian, Shift,
+  delete, space, done); Y opens the search with the keyboard already up. Bigger columns, no see-through blur or
+  endless animations, and the window checks for news less often, so the battery lasts longer. The screen test plays
+  a game, searches with the keyboard and opens "Make this game moddable" with a fake gamepad only.
 - **Six more languages.** Ukrainian, Czech, Hungarian, Simplified Chinese, Japanese and Korean, every phrase
   of the window and every message, with their own plural rules and fonts that show Chinese, Japanese and Korean
   characters. The screen test now visits every screen in all sixteen languages.

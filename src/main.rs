@@ -837,6 +837,11 @@ impl AppState {
         hidden.into_iter().map(|(a, n)| json!({ "appid": a, "name": n })).collect()
     }
 
+    /// Controller mode: chosen, asked for with `rig --deck`, or the machine is a Steam Deck and nobody said no.
+    pub fn deck_on(&self) -> bool {
+        self.config.deck_mode || std::env::var_os("RIG_DECK").is_some() || (platform::is_steam_deck() && !self.config.deck_declined)
+    }
+
     pub fn to_json(&self) -> Value {
         let active_profiles: Vec<String> = self
             .games
@@ -856,7 +861,7 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
-            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.config.deck_mode || std::env::var_os("RIG_DECK").is_some(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
+            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
             "health": self.health,
@@ -6431,6 +6436,8 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             }
             if let Some(v) = body.get("deck_mode").and_then(Value::as_bool) {
                 st.config.deck_mode = v;
+                // on a Steam Deck controller mode is on by itself; turning it off is remembered as a choice
+                st.config.deck_declined = !v && platform::is_steam_deck();
             }
             st.save_config();
             st.notifier.bump();

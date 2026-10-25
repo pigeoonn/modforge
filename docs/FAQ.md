@@ -35,7 +35,7 @@ settings, memory and processor numbers) are hidden or empty there. See [TESTING]
 **Why no Flatpak?** A Flatpak sandbox cannot start your games or reach their folders the way a mod manager must. Use the AppImage,
 the Arch package or build from source ([INSTALL](INSTALL.md)).
 
-**Does it work on the Steam Deck?** There is a controller mode (`rig --deck`, or Controller mode in Settings) with big controls and gamepad navigation, but it has not been tried on a real Deck yet. If you try it, please tell us how it went.
+**Does it work on the Steam Deck?** Controller mode switches on by itself on a Deck (or run `rig --deck`; it is also in Settings). It has big controls, gamepad navigation, an on-screen keyboard for search boxes, and it asks for news less often to save battery. The screen test drives it with a fake gamepad, but it has not been tried on a real Deck yet: if you try it, please tell us how it went.
 
 **How do I move to another computer?** *Tools → Backup & Disk → Save a backup* writes one file; restore it on the other computer.
 Mod files themselves are fetched again from where they came from (a modpack can carry the ones that cannot be).

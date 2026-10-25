@@ -13,7 +13,7 @@ const KEYS = {
 const SHIFT = 8, CTRL = 2;
 
 // what the page answers about the focused element: its name (as a screen reader would say it) and whether focus shows
-const FOCUS_JS = `(() => {
+export const FOCUS_JS = `(() => {
   const e = document.activeElement;
   if (!e || e === document.body) return { tag: 'body' };
   const letters = s => /[\\p{L}\\p{N}]/u.test(s || '');

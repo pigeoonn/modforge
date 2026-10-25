@@ -356,7 +356,21 @@ pub fn free_bytes(dir: &Path) -> Option<u64> {
         }
         Some((s.f_bavail as u64).saturating_mul(s.f_frsize as u64))
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetDiskFreeSpaceExW(dir: *const u16, available: *mut u64, total: *mut u64, free: *mut u64) -> i32;
+        }
+        let mut wide: Vec<u16> = dir.as_os_str().encode_wide().collect();
+        wide.push(0);
+        let mut available = 0u64;
+        // the space this user may use (quotas count), for the drive the folder is on
+        let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, std::ptr::null_mut(), std::ptr::null_mut()) };
+        (ok != 0).then_some(available)
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = dir;
         None

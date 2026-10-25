@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AUDIT_JS } from './a11y.mjs';
 import { keyboardJourneys } from './keyboard.mjs';
+import { controllerJourneys } from './controller.mjs';
 
 const [rigBin, browserBin, shotsDir] = process.argv.slice(2);
 // two functions of the same name in the page: the later one silently replaces the earlier (this once broke the activity log)
@@ -145,6 +146,8 @@ try {
   }
   // play, install a mod and fix a crash with the keyboard alone (see tests/keyboard.mjs)
   for (const p of await keyboardJourneys({ send, ev, sleep, fake })) failures.push('[keyboard] ' + p);
+  // the same with a gamepad alone (see tests/controller.mjs)
+  for (const p of await controllerJourneys({ ev, sleep, fake })) failures.push('[gamepad] ' + p);
   if (process.env.SMOKE_KEYS_ONLY) throw new Error('stopped after the keyboard journeys: ' + failures.length + ' problems');
   // hostile and awkward names (markup, quotes, template syntax, very long, right-to-left, emoji) in every list must stay text
   {

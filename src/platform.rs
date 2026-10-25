@@ -20,6 +20,33 @@ pub const OS: &str = if cfg!(windows) {
     "linux"
 };
 
+/// True on a Steam Deck (or in its game mode): the maker's own signs, none of which a PC has.
+/// `product` is the board name from the firmware ("Jupiter" is the first Deck, "Galileo" the OLED one),
+/// `os_release` the text of /etc/os-release.
+pub fn looks_like_deck(steam_deck_env: Option<&str>, product: &str, os_release: &str, gamescope: bool) -> bool {
+    steam_deck_env == Some("1")
+        || gamescope
+        || matches!(product.trim(), "Jupiter" | "Galileo")
+        || os_release.lines().any(|l| l.trim().replace('"', "").eq_ignore_ascii_case("ID=steamos"))
+}
+
+/// Whether this computer is a Steam Deck. Only Linux can be one; the answer is looked up once.
+pub fn is_steam_deck() -> bool {
+    static DECK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *DECK.get_or_init(|| {
+        if cfg!(test) || !cfg!(target_os = "linux") {
+            return false;
+        }
+        let read = |p: &str| std::fs::read_to_string(p).unwrap_or_default();
+        looks_like_deck(
+            std::env::var("SteamDeck").ok().as_deref(),
+            &read("/sys/devices/virtual/dmi/id/product_name"),
+            &read("/etc/os-release"),
+            std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some(),
+        )
+    })
+}
+
 fn env_path(var: &str) -> Option<PathBuf> {
     std::env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
 }
@@ -311,6 +338,17 @@ mod tests {
         assert_eq!(parse_reg_query(out, "SteamPath").as_deref(), Some("c:/program files (x86)/steam"));
         assert_eq!(parse_reg_query(out, "AutoLoginUser"), None);
         assert_eq!(parse_reg_query("    SteamPathExtra    REG_SZ    x", "SteamPath"), None);
+    }
+
+    #[test]
+    fn a_steam_deck_is_told_by_its_own_signs() {
+        assert!(looks_like_deck(Some("1"), "", "", false));
+        assert!(looks_like_deck(None, "Jupiter\n", "", false));
+        assert!(looks_like_deck(None, "Galileo", "", false));
+        assert!(looks_like_deck(None, "", "NAME=\"SteamOS\"\nID=steamos\n", false));
+        assert!(looks_like_deck(None, "", "", true), "inside the Deck's game mode");
+        assert!(!looks_like_deck(None, "MS-7C02", "ID=cachyos\nID_LIKE=arch\n", false));
+        assert!(!looks_like_deck(Some("0"), "", "", false));
     }
 
     #[test]
