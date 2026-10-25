@@ -2,6 +2,10 @@
 
 ## Next
 
+- **Safer releases and an optional nightly report.** A tag only becomes a release when the checks of that exact commit
+  passed on Linux, Windows and macOS. A test keeps the state of a 500-game library fast. `packaging/nightly/` holds an
+  optional timer (Linux) that writes a health report of all your games to `~/.cache/rig/nightly.txt` each night,
+  skipping nights when a game is running.
 - **Help inside the app.** A `?` button in the header (or the `?` / F1 key, or Ctrl+K, "Help") opens a Help window.
   "My mod does not work" asks three things (what is going wrong, when it started, how you start the game) and then
   lists what to try, in order, each with one line on why and a button that opens it: Fix and play, Launch Options,

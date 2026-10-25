@@ -11768,11 +11768,15 @@ mod tests {
         let h = harness("batch");
         add_plain_game(&h);
         let state = || api(&h, "/api/state", json!({}));
+        // hold the worker until all four are queued, or a quick machine finishes the first ones and starts a new batch
+        h.state.write().unwrap().install_worker = true;
         for i in 0..3 {
             let zip = zip_of(&h, &format!("m{i}"), &[(&format!("Data/mod{i}.esp"), "X")]);
             assert_eq!(http(&h, "POST", &format!("/api/drop_upload?name=Mod%20{i}.zip"), &[("X-Rig-Token", &h.token)], &zip).0, 200);
         }
         assert_eq!(http(&h, "POST", "/api/drop_upload?name=broken.zip", &[("X-Rig-Token", &h.token)], b"this is not a zip").0, 200);
+        let worker = Arc::clone(&h.state);
+        thread::spawn(move || install_worker(&worker));
         wait_until("the batch is over", || state()["batch"]["finished"] == true);
         let b = state()["batch"].clone();
         assert_eq!((b["total"].as_u64(), b["done"].as_u64(), b["added"].as_u64()), (Some(4), Some(4), Some(3)), "{b}");
@@ -15413,6 +15417,35 @@ mod tests {
             let damaged = String::from_utf8_lossy(&b).to_string();
             let _ = steam::get_launch_options(&damaged, "7");
             let _ = steam::set_launch_options(&damaged, "7", "y");
+        }
+    }
+
+    /// Speed budget for what the window asks for most: the whole state, with a library of 500 games. It runs a few
+    /// times a second while the window is open, so it has to stay far below a frame budget, and twice the games must
+    /// not cost much more than twice the time.
+    #[test]
+    fn the_state_of_a_library_of_hundreds_of_games_is_built_quickly() {
+        let h = harness("bigstate");
+        fn timed(h: &Harness, games: usize) -> Duration {
+            {
+                let mut st = h.state.write().unwrap();
+                let one = st.games[0].clone();
+                st.games = (0..games).map(|i| GameEntry { name: format!("Game number {i}"), appid: format!("9{i:05}"), ..one.clone() }).collect();
+            }
+            let t = Instant::now();
+            let mut size = 0;
+            for _ in 0..5 {
+                size = read_state(&h.state).to_json().to_string().len();
+            }
+            assert!(size > games * 50, "{size}");
+            t.elapsed() / 5
+        }
+        let (small, big) = (timed(&h, 250), timed(&h, 500));
+        // the automated checks run on shared machines: the numbers are generous on purpose
+        let limit = if cfg!(any(windows, target_os = "macos")) { 2000 } else { 600 };
+        assert!(big < Duration::from_millis(limit), "the state of 500 games took {big:?}");
+        if small > Duration::from_millis(40) {
+            assert!(big < small * 5, "twice the games took {big:?} against {small:?}");
         }
     }
 

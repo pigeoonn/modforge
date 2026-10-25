@@ -11,7 +11,31 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # A tag only becomes a release when the checks (tests, screen test and the journeys on all three systems) of
+  # that exact commit passed. A manual run does not publish anything, so it is not held up.
+  checks-passed:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Wait for the checks of this commit
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 90); do
+            res=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"')
+            echo "attempt $i: ${res:-no run yet}"
+            case "$res" in
+              "completed success") exit 0 ;;
+              completed*) echo "The checks of this commit did not pass: no release."; exit 1 ;;
+            esac
+            sleep 30
+          done
+          echo "The checks did not finish in time."; exit 1
+
   windows-x86_64:
+    needs: checks-passed
     runs-on: windows-latest
     permissions:
       contents: write
@@ -46,6 +70,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" gantry-*.zip gantry-*.zip.sha256 --clobber
 
   macos-arm64:
+    needs: checks-passed
     runs-on: macos-latest
     permissions:
       contents: write
@@ -78,6 +103,7 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" gantry-*.tar.gz gantry-*.tar.gz.sha256 --clobber
 
   linux-x86_64:
+    needs: checks-passed
     # the oldest runner we can use: the binary then runs on any newer distribution (glibc)
     runs-on: ubuntu-22.04
     permissions:

@@ -1,0 +1,9 @@
+[Unit]
+Description=Gantry: nightly health report
+
+[Timer]
+OnCalendar=*-*-* 04:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target
