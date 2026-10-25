@@ -2,6 +2,7 @@
 pub mod bisect;
 pub mod compat;
 pub mod covers;
+pub mod crashreport;
 pub mod configs;
 pub mod crash;
 pub mod deploy;
@@ -217,6 +218,8 @@ pub struct AppState {
     pub self_target: Option<PathBuf>,
     /// The version that was put in place and waits for a restart.
     pub update_ready: Option<String>,
+    /// How many reports of Gantry's own failures are kept on this computer.
+    pub crash_reports: usize,
     /// What is known about particular games (built-in list plus the user's `recipes.json`).
     pub recipes: Vec<recipes::Recipe>,
     /// GitHub's API address and, in tests, the address its downloads come from.
@@ -729,6 +732,7 @@ impl AppState {
             new_version: None,
             self_target: selfupdate::target(),
             update_ready: None,
+            crash_reports: 0,
             recipes: Vec::new(),
             github_api: github::API.into(),
             github_allow: None,
@@ -868,7 +872,7 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
-            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "can_self_update": self.self_target.is_some(), "update_ready": self.update_ready, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
+            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "can_self_update": self.self_target.is_some(), "crash_reports": self.crash_reports, "update_ready": self.update_ready, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
             "health": self.health,
@@ -6436,6 +6440,12 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 }
             });
         }
+        "/api/open_crash_reports" => {
+            let dir = crash_dir();
+            if dir.is_dir() {
+                xdg_open(dir);
+            }
+        }
         "/api/self_update" => {
             let state_bg = Arc::clone(state);
             thread::spawn(move || self_update(&state_bg));
@@ -10648,6 +10658,27 @@ fn log_file_path() -> PathBuf {
     platform::cache_root().join("rig.log")
 }
 
+/// Tell once about reports written since the last start (Gantry failed and was started again).
+fn announce_crash_reports(state: &SharedState, dir: &Path) {
+    let seen = read_state(state).config.crash_seen_ms;
+    let (total, fresh) = (crashreport::list(dir).len(), crashreport::unseen(dir, seen));
+    write_state(state).crash_reports = total;
+    if fresh > 0 {
+        {
+            let mut st = write_state(state);
+            st.config.crash_seen_ms = now_ms();
+            st.save_config();
+        }
+        log(state, "WARN", "Gantry stopped unexpectedly. A report was saved on this computer; nothing was sent.");
+        add_note(state, "selfcrash", "Gantry stopped unexpectedly last time. A report was saved on this computer and nothing was sent. Open Help to read it.", "");
+    }
+}
+
+/// Where the reports of Gantry's own failures are kept.
+fn crash_dir() -> PathBuf {
+    platform::cache_root().join("crash")
+}
+
 /// Launched from a menu there is no terminal: record the problem and tell the user.
 fn fatal(msg: &str) -> ! {
     eprintln!("rig: {}", msg);
@@ -11143,6 +11174,11 @@ fn main() {
         if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(log_file_path()) {
             let _ = std::io::Write::write_all(&mut f, line.as_bytes());
         }
+        // a report to read on this computer; nothing is sent
+        let log = fs::read_to_string(log_file_path()).unwrap_or_default();
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        let home = home_dir().to_string_lossy().to_string();
+        let _ = crashreport::write(&crash_dir(), ms, env!("CARGO_PKG_VERSION"), platform::OS, &info.to_string(), crashreport::tail(&log, 6000), &home);
     }));
 
     if let Some(code) = handle_cli(std::env::args().skip(1).collect()) {
@@ -11194,6 +11230,7 @@ fn main() {
     spawn_health_monitor(Arc::downgrade(&state));
     spawn_cover_lookup(Arc::downgrade(&state));
     selfupdate::clean_up_after_update();
+    announce_crash_reports(&state, &crash_dir());
     spawn_self_update_check(Arc::downgrade(&state));
     spawn_want_watcher(Arc::downgrade(&state));
     spawn_auto_backup(Arc::downgrade(&state));
@@ -15985,6 +16022,32 @@ mod tests {
         h.state.write().unwrap().new_version = Some("v1/../../x".into());
         api(&h, "/api/self_update", json!({}));
         wait_until("no newer", || last_log(&h).contains("no newer Gantry"));
+    }
+
+    #[test]
+    fn a_failure_of_gantry_is_announced_once_and_the_reports_stay_readable() {
+        let h = harness("selfcrash");
+        let dir = h._dir.join("crash");
+        let told = || h.state.read().unwrap().notes.json()["items"].as_array().unwrap().iter().filter(|n| n["kind"] == "selfcrash").count();
+        announce_crash_reports(&h.state, &dir);
+        assert_eq!(api(&h, "/api/state", json!({}))["crash_reports"], 0);
+        assert_eq!(told(), 0);
+        crashreport::write(&dir, 5, "5.4.0", "Linux", "panicked at src/x.rs:1", "log line", "/home/ann").unwrap();
+        announce_crash_reports(&h.state, &dir);
+        announce_crash_reports(&h.state, &dir);
+        assert_eq!(told(), 1, "told once, not at every start");
+        assert_eq!(api(&h, "/api/state", json!({}))["crash_reports"], 1);
+        assert!(h.state.read().unwrap().config.crash_seen_ms > 0);
+        // a newer failure is told about again
+        std::thread::sleep(Duration::from_millis(5));
+        crashreport::write(&dir, now_ms() + 1000, "5.4.0", "Linux", "panicked again", "", "/home/ann").unwrap();
+        let before = h.state.read().unwrap().config.crash_seen_ms;
+        announce_crash_reports(&h.state, &dir);
+        assert_eq!(api(&h, "/api/state", json!({}))["crash_reports"], 2);
+        assert!(h.state.read().unwrap().config.crash_seen_ms >= before);
+        assert!(last_log(&h).contains("stopped unexpectedly"), "{}", last_log(&h));
+        assert_eq!(told(), 1, "the same words within a minute are one note");
+        api(&h, "/api/open_crash_reports", json!({}));
     }
 
     #[test]

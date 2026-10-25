@@ -3844,6 +3844,7 @@
     const idx = appState.games.findIndex(g => g.appid === appid);
     if (appid && idx >= 0 && idx !== appState.selected_idx) await ipcPost('/api/select', { index: idx });
     if (kind === 'crash') openCrashDetective();
+    else if (kind === 'selfcrash') openHelp();
     else if (kind === 'download') openDownloads();
     else if (kind === 'known') focusHealth();
     else { setTab('mods'); if (kind === 'updates') showToast(t('Open Mod Library and press Update all.')); }
@@ -4047,6 +4048,7 @@
     if (n > 0) row.push(`<button class="btn" onclick="helpBack()">${escapeHtml(t('Back'))}</button>`);
     if (n > 0) row.push(`<button class="btn" onclick="helpAns = []; renderHelp()">${escapeHtml(t('Start over'))}</button>`);
     h += `<div class="cp-row" style="margin-top:4px">${row.join('')}</div><hr style="border-color:rgba(255,255,255,0.1); width:100%">`;
+    if (appState.crash_reports > 0) h += `<div class="cp-note">${escapeHtml(t('Reports of Gantry stopping unexpectedly are kept on this computer ({}). Nothing was sent; read one before you attach it to a bug report.', appState.crash_reports))}</div><div class="cp-row"><button class="btn" onclick="ipcSend('/api/open_crash_reports', {})">${escapeHtml(t('Show the crash reports'))}</button></div>`;
     h += `<div class="cp-row"><button class="btn" onclick="helpDoc('guide')">${escapeHtml(t('Read the guide'))}</button><button class="btn" onclick="helpDoc('faq')">${escapeHtml(t('Questions and answers'))}</button><button class="btn" onclick="closeModals(); openKeys()">${escapeHtml(t('Keyboard shortcuts'))}</button><button class="btn" onclick="closeModals(); tourStep = 0; showTour()">${escapeHtml(t('Show the tour again'))}</button><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'bug' })">${escapeHtml(t('🐞 Report a problem'))}</button></div>`;
     document.getElementById('helpBody').innerHTML = h;
   }

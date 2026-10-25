@@ -192,6 +192,9 @@ pub struct RigConfigData {
     /// The version whose "What's new" the user has seen.
     #[serde(default)]
     pub seen_version: String,
+    /// The newest crash report of Gantry itself that the person has been told about (milliseconds).
+    #[serde(default)]
+    pub crash_seen_ms: u64,
     /// Mods set aside in the store with the heart, by game: the cards as the store showed them.
     #[serde(default)]
     pub saved_mods: HashMap<String, Vec<serde_json::Value>>,

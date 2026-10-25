@@ -2,6 +2,10 @@
 
 ## Next
 
+- **A report when Gantry itself fails.** If Gantry stops unexpectedly it saves a short report on your computer (the
+  version, your system, where it failed, the end of the log, your home folder written as `~`). At the next start you
+  get a notification, and Help has a button that shows the reports. Nothing is ever sent; read one before you attach
+  it to a bug report. The newest ten are kept.
 - **Gantry updates itself (AppImage and Windows).** When a newer Gantry exists, Settings shows *Update now*. After your
   yes it downloads the file from Gantry's own GitHub release, compares its SHA-256 with the release's checksum file,
   swaps it in (the old copy is kept until it is safe to remove) and asks you to close and reopen Gantry. If the
