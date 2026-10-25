@@ -52,7 +52,7 @@ export async function controllerJourneys({ ev, sleep, fake }) {
         window.__pad = { id: 'Fake pad', index: 0, connected: true, mapping: 'standard', buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })), axes: [0, 0, 0, 0] };
         navigator.getGamepads = () => [window.__pad];
         const idx = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, start: 9, up: 12, down: 13, left: 14, right: 15 };
-        window.__padTap = async (name) => { const b = window.__pad.buttons[idx[name]]; b.pressed = true; await new Promise(r => setTimeout(r, 110)); b.pressed = false; await new Promise(r => setTimeout(r, 90)); };
+        const frames = n => new Promise(r => { let c = 0; const step = () => (++c >= n ? r() : requestAnimationFrame(step)); requestAnimationFrame(step); setTimeout(r, 700); }); window.__padTap = async (name) => { const b = window.__pad.buttons[idx[name]]; b.pressed = true; await frames(3); await new Promise(r => setTimeout(r, 90)); b.pressed = false; await frames(3); await new Promise(r => setTimeout(r, 40)); };
       }
       deckSet(false); deckSet(true); document.activeElement && document.activeElement.blur(); true`);
     await sleep(200);
