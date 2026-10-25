@@ -2,6 +2,9 @@
 
 ## Next
 
+- **A Windows installer** next to the zip (`gantry-<version>-windows-x86_64-setup.exe`): installs for you only, no
+  administrator rights, with a Start menu entry, an uninstaller, and optional desktop shortcut and Nexus Mods
+  link handler. Built by the release workflow; if building it ever fails the release still goes out with the zip.
 - **A report when Gantry itself fails.** If Gantry stops unexpectedly it saves a short report on your computer (the
   version, your system, where it failed, the end of the log, your home folder written as `~`). At the next start you
   get a notification, and Help has a button that shows the reports. Nothing is ever sent; read one before you attach

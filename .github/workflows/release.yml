@@ -54,12 +54,26 @@ jobs:
           cp README.md docs/INSTALL.md "$dir/"
           7z a "$dir.zip" "$dir"
           sha256sum "$dir.zip" > "$dir.zip.sha256"
+      # The installer is a bonus next to the zip: if building it fails, the release still goes out.
+      - name: Installer
+        id: installer
+        continue-on-error: true
+        shell: bash
+        run: |
+          ver="${GITHUB_REF_NAME:-dev}"
+          iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
+          [ -x "$iscc" ] || { choco install innosetup --no-progress -y; }
+          # no path conversion of the /D switch by the shell
+          MSYS_NO_PATHCONV=1 "$iscc" "/DAppVer=${ver}" packaging/windows/gantry.iss
+          sha256sum "gantry-${ver}-windows-x86_64-setup.exe" > "gantry-${ver}-windows-x86_64-setup.exe.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: gantry-windows-x86_64
           path: |
             gantry-*.zip
             gantry-*.zip.sha256
+            gantry-*-setup.exe
+            gantry-*-setup.exe.sha256
       - name: Add to the release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -68,6 +82,7 @@ jobs:
         run: |
           for i in 1 2 3 4 5 6; do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
           gh release upload "$GITHUB_REF_NAME" gantry-*.zip gantry-*.zip.sha256 --clobber
+          ls gantry-*-setup.exe >/dev/null 2>&1 && gh release upload "$GITHUB_REF_NAME" gantry-*-setup.exe gantry-*-setup.exe.sha256 --clobber || echo "no installer in this run"
 
   macos-arm64:
     needs: checks-passed

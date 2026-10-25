@@ -27,7 +27,11 @@ source (about a minute). This page walks through it for each system.
 
 ## Windows
 
-Download `gantry-<version>-windows-x86_64.zip` from the **Releases** page, unpack it anywhere and run
+**Installer (easiest):** download `gantry-<version>-windows-x86_64-setup.exe` from the **Releases** page and run it. It
+installs for you only (no administrator rights), adds a Start menu entry and an uninstaller, and can add a desktop
+shortcut and take over the Nexus Mods download button. Later versions update from inside Gantry (*Settings*, *Update now*).
+
+**Or the zip:** download `gantry-<version>-windows-x86_64.zip` from the **Releases** page, unpack it anywhere and run
 `rig.exe` (nothing is installed; delete the folder to remove it). The file is not signed, so Windows SmartScreen may say
 "Windows protected your PC": choose *More info*, then *Run anyway*. To get a Start menu entry and a permanent
 place for the program, open a terminal in that folder and run:
