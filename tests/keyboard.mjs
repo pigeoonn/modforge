@@ -146,6 +146,30 @@ export async function keyboardJourneys({ send, ev, sleep, fake }) {
     }
     await ev(`appState.crash = null; closeModals()`);
   }
+  // 4. "my mod does not work": ? opens Help, three answers lead to buttons that act
+  {
+    const J = 'help';
+    await start();
+    await press('?');
+    await sleep(200);
+    if (!(await ev(`document.getElementById('helpModal').classList.contains('open')`))) problems.push(`[${J}] ? did not open Help`);
+    for (let i = 0; i < 3; i++) {
+      if (!(await tabTo(J, `e.matches('#helpBody button[onclick^="helpPick"]')`, `an answer to question ${i + 1}`, 14))) break;
+      await press('Enter');
+      await sleep(150);
+    }
+    const rows = await ev(`document.querySelectorAll('#helpBody .disk-row').length`);
+    if (rows < 3) problems.push(`[${J}] three answers gave ${rows} things to try`);
+    else if (await tabTo(J, `e.matches('#helpBody .disk-row .btn')`, 'a thing to try', 14)) {
+      await press('Enter');
+      await sleep(300);
+      if (await ev(`document.getElementById('helpModal').classList.contains('open')`)) problems.push(`[${J}] choosing something to try left Help open`);
+    }
+    await ev(`openHelp()`);
+    await press('Escape');
+    await sleep(150);
+    if (await ev(`document.getElementById('helpModal').classList.contains('open')`)) problems.push(`[${J}] Escape did not close Help`);
+  }
   await ev(`if (window.__kbIpc) { ipcSend = window.__kbIpc; window.__kbIpc = null; } if (window.__kbFetch) { window.fetch = window.__kbFetch; window.__kbFetch = null; } closeModals(); true`);
   return [...new Set(problems)];
 }

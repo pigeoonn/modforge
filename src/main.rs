@@ -3605,6 +3605,19 @@ fn nexus_install_needs(state: &SharedState, appid: &str, lib_id: &str) {
 /// Gantry's own home on GitHub.
 const SELF_REPO: (&str, &str) = ("pigeoonn", "gantry");
 
+/// One of Gantry's own help pages on GitHub. Only these few names exist; anything else opens nothing.
+fn docs_url(page: &str) -> Option<String> {
+    let file = match page {
+        "guide" => "GUIDE.md",
+        "faq" => "FAQ.md",
+        "reference" => "REFERENCE.md",
+        "tutorial" => "TUTORIAL.md",
+        "install" => "INSTALL.md",
+        _ => return None,
+    };
+    Some(format!("https://github.com/{}/{}/blob/main/docs/{}", SELF_REPO.0, SELF_REPO.1, file))
+}
+
 /// The address of Gantry's issue form with what the form asks first already filled in: the version and system for a
 /// bug, the game for a game request. Nothing else leaves the computer, and the person still has to press Submit.
 fn issue_url(game_request: bool, system: &str, game: &str) -> String {
@@ -5944,6 +5957,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             let url = match body_str(body, "which").as_str() {
                 "workshop" if !body_str(body, "id").is_empty() && body_str(body, "id").bytes().all(|b| b.is_ascii_digit()) => Some(format!("https://steamcommunity.com/sharedfiles/filedetails/?id={}", body_str(body, "id"))),
                 "steam_key" => Some("https://steamcommunity.com/dev/apikey".to_string()),
+                "docs" => docs_url(&body_str(body, "page")),
                 "nexus_key" => Some("https://www.nexusmods.com/users/myaccount?tab=api".to_string()),
                 // a mod page, only ever on Nexus Mods itself
                 "nexus_page" if page.starts_with("https://www.nexusmods.com/") && !page.contains(char::is_whitespace) => Some(page),
@@ -15741,6 +15755,18 @@ mod tests {
         api(&h, "/api/settings", json!({ "window_size": "big" }));
         api(&h, "/api/settings", json!({ "window_size": [1500] }));
         assert_eq!((h.state.read().unwrap().config.window_w, h.state.read().unwrap().config.window_h), (1500, 950), "unchanged");
+    }
+
+    #[test]
+    fn the_help_buttons_only_reach_gantrys_own_pages() {
+        assert_eq!(docs_url("faq").as_deref(), Some("https://github.com/pigeoonn/gantry/blob/main/docs/FAQ.md"));
+        assert!(docs_url("guide").is_some() && docs_url("reference").is_some() && docs_url("tutorial").is_some() && docs_url("install").is_some());
+        for bad in ["", "../x", "GUIDE.md", "https://example.com", "faq/../../x"] {
+            assert!(docs_url(bad).is_none(), "{bad}");
+        }
+        let h = harness("docslink");
+        api(&h, "/api/open_link", json!({ "which": "docs", "page": "guide" }));
+        api(&h, "/api/open_link", json!({ "which": "docs", "page": "nope" }));
     }
 
     #[test]

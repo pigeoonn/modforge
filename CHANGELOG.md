@@ -2,6 +2,12 @@
 
 ## Next
 
+- **Help inside the app.** A `?` button in the header (or the `?` / F1 key, or Ctrl+K, "Help") opens a Help window.
+  "My mod does not work" asks three things (what is going wrong, when it started, how you start the game) and then
+  lists what to try, in order, each with one line on why and a button that opens it: Fix and play, Launch Options,
+  the Mod Library, Crash Detective, Fix placement, newer versions of your mods, Self-Heal, Rig Doctor, Why is it
+  slow, Compatibility, the problem report. Below it: the guide, the questions and answers, the keyboard shortcuts,
+  the tour and the bug form. In all 16 languages; the keyboard test walks through it.
 - **Controller mode, finished for the Steam Deck.** It turns on by itself on a Deck (and stays off if you turn it
   off). A on a text box opens an on-screen keyboard (letters, symbols, Cyrillic for Russian and Ukrainian, Shift,
   delete, space, done); Y opens the search with the keyboard already up. Bigger columns, no see-through blur or
