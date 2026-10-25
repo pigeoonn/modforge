@@ -3,7 +3,7 @@
 # Needs the repository to be public. Submit it with:  git clone ssh://aur@aur.archlinux.org/gantry-git.git
 pkgname=gantry-git
 _pkgname=gantry
-pkgver=5.4.0
+pkgver=5.5.0
 pkgrel=1
 pkgdesc='Mod, trainer and crash-hunting hub for games on Linux (development version)'
 arch=('x86_64')

@@ -1,6 +1,6 @@
 # Changes
 
-## Next
+## 5.5.0
 
 - **Search in Settings.** A box at the top of Settings keeps only the settings whose words match what you type
   (the explanation under each setting counts too).

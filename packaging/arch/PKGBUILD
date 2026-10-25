@@ -1,7 +1,7 @@
 # Build and install Gantry from this checkout:
 #   cd packaging/arch && makepkg -si
 pkgname=gantry
-pkgver=5.4.0
+pkgver=5.5.0
 pkgrel=1
 pkgdesc='Mod, trainer and crash-hunting hub for games on Linux'
 arch=('x86_64')
