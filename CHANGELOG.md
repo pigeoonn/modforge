@@ -2,6 +2,11 @@
 
 ## Next
 
+- **Gantry updates itself (AppImage and Windows).** When a newer Gantry exists, Settings shows *Update now*. After your
+  yes it downloads the file from Gantry's own GitHub release, compares its SHA-256 with the release's checksum file,
+  swaps it in (the old copy is kept until it is safe to remove) and asks you to close and reopen Gantry. If the
+  checksum is missing or does not match, nothing changes. Other installs (a package manager, a tarball, a build from
+  source) say how to update the way they were installed. Tested with a fake GitHub.
 - **Safer releases and an optional nightly report.** A tag only becomes a release when the checks of that exact commit
   passed on Linux, Windows and macOS. A test keeps the state of a 500-game library fast. `packaging/nightly/` holds an
   optional timer (Linux) that writes a health report of all your games to `~/.cache/rig/nightly.txt` each night,

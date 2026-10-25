@@ -43,6 +43,7 @@ pub mod perf;
 pub mod recipes;
 pub mod repair;
 pub mod saves;
+pub mod selfupdate;
 pub mod screenshots;
 pub mod steam;
 pub mod steamlib;
@@ -212,6 +213,10 @@ pub struct AppState {
     pub covers_base: String,
     /// A newer Gantry release than this one, when GitHub has said so.
     pub new_version: Option<String>,
+    /// The file Gantry could replace by itself (the AppImage, the Windows build), when this install is one of those.
+    pub self_target: Option<PathBuf>,
+    /// The version that was put in place and waits for a restart.
+    pub update_ready: Option<String>,
     /// What is known about particular games (built-in list plus the user's `recipes.json`).
     pub recipes: Vec<recipes::Recipe>,
     /// GitHub's API address and, in tests, the address its downloads come from.
@@ -722,6 +727,8 @@ impl AppState {
             ge_source: compat::GeSource::default(),
             covers_base: covers::STORE_SEARCH.into(),
             new_version: None,
+            self_target: selfupdate::target(),
+            update_ready: None,
             recipes: Vec::new(),
             github_api: github::API.into(),
             github_allow: None,
@@ -861,7 +868,7 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
-            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
+            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "can_self_update": self.self_target.is_some(), "update_ready": self.update_ready, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
             "health": self.health,
@@ -3657,6 +3664,85 @@ fn newer_gantry(state: &SharedState) -> Option<(String, String)> {
     best
 }
 
+/// Put the newest Gantry in place of this one (AppImage or Windows build), after the person said yes. The file comes
+/// from Gantry's own release, its checksum has to match, and the running copy is only swapped when all of it is in hand.
+fn self_update(state: &SharedState) {
+    let (target, tag, api, allow) = {
+        let st = read_state(state);
+        (st.self_target.clone(), st.new_version.clone(), st.github_api.clone(), st.github_allow.clone())
+    };
+    let Some(target) = target else {
+        return log(state, "WARN", "This copy of Gantry cannot update itself. Update it the way you installed it, or download the new version.");
+    };
+    let Some(tag) = tag.filter(|t| !t.is_empty() && t.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')) else {
+        return log(state, "INFO", "There is no newer Gantry to put in place. Use Check for a newer Gantry first.");
+    };
+    let curl = |url: &str| -> Option<Vec<u8>> {
+        let out = Command::new("curl").args(["-fsSL", "--max-time", "60", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Gantry"]).arg(url).stdin(Stdio::null()).output().ok()?;
+        out.status.success().then_some(out.stdout)
+    };
+    let release = curl(&format!("{}/repos/{}/{}/releases/tags/{}", api, SELF_REPO.0, SELF_REPO.1, tag)).and_then(|b| serde_json::from_slice::<Value>(&b).ok());
+    let picked = release.as_ref().and_then(|r| selfupdate::pick_asset(&r["assets"], cfg!(windows), std::env::consts::ARCH));
+    let Some((name, url, sum_url)) = picked else {
+        return log(state, "WARN", format!("Gantry {} has no file for this kind of install (or no checksum), so it cannot be put in place. Download it from the release page.", tag));
+    };
+    if ![&url, &sum_url].iter().all(|u| github::download_ok(u, SELF_REPO.0, SELF_REPO.1, allow.as_deref())) || name.contains("..") || name.contains('/') || name.contains('\\') {
+        return log(state, "ERR", "Refusing a download that is not from Gantry's own releases.");
+    }
+    let dir = read_state(state).cache_root().join("drops").join(fsutil::unique_token());
+    let dest = dir.join(&name);
+    log(state, "INFO", format!("Downloading Gantry {}...", tag));
+    let got = fs::create_dir_all(&dir).is_ok()
+        && Command::new("curl")
+            .args(["-fL", "--retry", "2", "--connect-timeout", "15", "--max-time", "1800", "-sS", "-o"])
+            .arg(&dest)
+            .arg(&url)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+    let expected = curl(&sum_url).and_then(|b| selfupdate::expected_sum(&String::from_utf8_lossy(&b), &name));
+    let finish = |msg: &str| {
+        let _ = fs::remove_dir_all(&dir);
+        log(state, "ERR", msg.to_string());
+    };
+    if !got || fs::metadata(&dest).map(|m| m.len()).unwrap_or(0) == 0 {
+        return finish("The download failed (check your connection).");
+    }
+    let Some(expected) = expected else {
+        return finish("The checksum file of that release could not be read, so nothing was changed.");
+    };
+    if hashing::sha256_file(&dest).map(|h| h != expected).unwrap_or(true) {
+        return finish("The downloaded file does not match its checksum, so nothing was changed.");
+    }
+    // the Windows build comes in a zip with the program inside
+    let new = if cfg!(windows) {
+        let out = dir.join("unpacked");
+        let unpacked = fs::create_dir_all(&out).is_ok() && platform::extract_commands(&dest, &out).into_iter().any(|mut c| c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false));
+        if unpacked { selfupdate::find_named(&out, "rig.exe") } else { None }
+    } else {
+        Some(dest.clone())
+    };
+    let result = match new {
+        Some(n) => selfupdate::swap_in(&target, &n).map_err(|e| e.to_string()),
+        None => Err("the program was not in the download".to_string()),
+    };
+    let _ = fs::remove_dir_all(&dir);
+    match result {
+        Ok(()) => {
+            {
+                let mut st = write_state(state);
+                st.update_ready = Some(tag.clone());
+                st.notifier.bump();
+            }
+            log(state, "OK", format!("Gantry {} is in place. Close Gantry and open it again to use it.", tag));
+        }
+        Err(e) => log(state, "ERR", format!("Could not replace this copy of Gantry: {}", e)),
+    }
+}
+
 /// Check for a newer Gantry once a day and say so once per version. Quiet when GitHub does not answer.
 fn spawn_self_update_check(state: Weak<RwLock<AppState>>) {
     let mut told = String::new();
@@ -6349,6 +6435,10 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                     log(&state_bg, "OK", "You have the newest Gantry.");
                 }
             });
+        }
+        "/api/self_update" => {
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || self_update(&state_bg));
         }
         "/api/settings" => {
             let mut st = write_state(state);
@@ -11103,6 +11193,7 @@ fn main() {
     resume_vanilla_sessions(&state);
     spawn_health_monitor(Arc::downgrade(&state));
     spawn_cover_lookup(Arc::downgrade(&state));
+    selfupdate::clean_up_after_update();
     spawn_self_update_check(Arc::downgrade(&state));
     spawn_want_watcher(Arc::downgrade(&state));
     spawn_auto_backup(Arc::downgrade(&state));
@@ -15835,6 +15926,65 @@ mod tests {
         // nothing answers (a private repository, no connection): quietly no news
         h.state.write().unwrap().github_api = "http://127.0.0.1:1".into();
         assert!(newer_gantry(&h.state).is_none());
+    }
+
+    #[test]
+    fn gantry_replaces_itself_only_with_a_file_whose_checksum_matches() {
+        if cfg!(windows) {
+            return; // the Windows build comes in a zip; the pieces are tested in selfupdate.rs
+        }
+        let h = harness("inplace");
+        let target = h._dir.join("Gantry.AppImage");
+        let name = format!("Gantry-99.0.0-{}.AppImage", std::env::consts::ARCH);
+        let sum_of = |bytes: &[u8]| hashing::sha256_hex(&mut &bytes[..]).unwrap();
+        let serve = |sum: Option<String>| {
+            let mut files = vec![(name.as_str(), b"NEW PROGRAM".to_vec())];
+            if let Some(s) = sum {
+                files.push((Box::leak(format!("{name}.sha256").into_boxed_str()) as &str, format!("{s}  {name}\n").into_bytes()));
+            }
+            let (base, hits) = github::fake::start_many(vec![("pigeoonn/gantry", "v99.0.0", files)]);
+            let mut st = h.state.write().unwrap();
+            st.github_allow = Some(format!("{base}/dl/"));
+            st.github_api = base;
+            hits
+        };
+        fs::write(&target, "OLD PROGRAM").unwrap();
+        let ready = || api(&h, "/api/state", json!({}))["update_ready"].clone();
+
+        // an install that cannot replace itself (a package, a tarball) says so and changes nothing
+        assert_eq!(api(&h, "/api/state", json!({}))["can_self_update"], false);
+        h.state.write().unwrap().new_version = Some("v99.0.0".into());
+        api(&h, "/api/self_update", json!({}));
+        wait_until("told", || last_log(&h).contains("cannot update itself"));
+
+        h.state.write().unwrap().self_target = Some(target.clone());
+        assert_eq!(api(&h, "/api/state", json!({}))["can_self_update"], true);
+        // a wrong checksum, a missing checksum file and a download from somewhere else: the program stays as it was
+        serve(Some("0".repeat(64)));
+        api(&h, "/api/self_update", json!({}));
+        wait_until("refused", || last_log(&h).contains("does not match its checksum"));
+        serve(None);
+        api(&h, "/api/self_update", json!({}));
+        wait_until("no checksum", || last_log(&h).contains("no file for this kind of install"));
+        serve(Some(sum_of(b"NEW PROGRAM")));
+        h.state.write().unwrap().github_allow = None;
+        api(&h, "/api/self_update", json!({}));
+        wait_until("not from its releases", || last_log(&h).contains("not from Gantry's own releases"));
+        assert_eq!(fs::read_to_string(&target).unwrap(), "OLD PROGRAM");
+        assert_eq!(ready(), Value::Null);
+
+        // the right file: swapped in, runnable, the old copy gone, a restart asked for
+        let base = h.state.read().unwrap().github_api.clone();
+        h.state.write().unwrap().github_allow = Some(format!("{base}/dl/"));
+        api(&h, "/api/self_update", json!({}));
+        wait_until("in place", || ready() == "v99.0.0");
+        assert_eq!(fs::read_to_string(&target).unwrap(), "NEW PROGRAM");
+        assert!(!h._dir.join("Gantry.AppImage.old").exists());
+        assert!(last_log(&h).contains("Close Gantry and open it again"), "{}", last_log(&h));
+        // a tag with odd characters is not looked up at all
+        h.state.write().unwrap().new_version = Some("v1/../../x".into());
+        api(&h, "/api/self_update", json!({}));
+        wait_until("no newer", || last_log(&h).contains("no newer Gantry"));
     }
 
     #[test]

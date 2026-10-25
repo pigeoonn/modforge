@@ -16,6 +16,7 @@ release (6.0) when these are true. Testers: this is the list of what still needs
 - [x] Homebrew tap; an AUR package and winget files that build and pass their checks.
 - [ ] Published on the AUR and in winget (needs the author's accounts).
 - [x] The app tells you when a newer version exists.
+- [x] The AppImage and the Windows build can replace themselves after a yes (checksum checked; not yet tried on a real Windows computer).
 - [ ] Windows downloads that do not trigger the "unknown publisher" warning (needs a code-signing certificate).
 - [ ] A Flatpak, if it can be done without giving up what a mod manager must do (see the FAQ).
 

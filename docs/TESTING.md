@@ -19,6 +19,9 @@ text of the activity log at the bottom of the window.
 7. Close the window: Gantry ends (unless "keep running in the background" is on). A game that was started stays running.
 8. A notification: in Settings press **Check for a newer Gantry** with a release newer than yours available, or
    wait for an update notice. A Windows toast should appear (it shows as "Windows PowerShell"; that is expected).
+9. Updating: with a newer release available, **Update now** in Settings (Windows build or AppImage) should download it,
+   say "Gantry … is in place", and after you close and open Gantry again the version in Settings is the new one. Tell
+   us if it says it could not replace the copy (a Gantry installed under *Program Files* may need to run as administrator).
 
 Known limits: no Wine parts (hidden); loaders (BepInEx, MelonLoader) work without launch options.
 
