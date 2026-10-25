@@ -48,6 +48,7 @@ pub mod selfupdate;
 pub mod screenshots;
 pub mod steam;
 pub mod steamlib;
+pub mod steamshortcut;
 pub mod workshop;
 pub mod thunderstore;
 pub mod trainer;
@@ -6440,6 +6441,14 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 }
             });
         }
+        "/api/steam_shortcut" => {
+            let close_steam = body.get("close_steam").and_then(Value::as_bool).unwrap_or(false);
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || match add_gantry_to_steam(&state_bg, close_steam) {
+                Ok(m) => log(&state_bg, "OK", m),
+                Err(e) => log(&state_bg, "WARN", e),
+            });
+        }
         "/api/open_crash_reports" => {
             let dir = crash_dir();
             if dir.is_dir() {
@@ -7560,6 +7569,56 @@ fn shutdown_steam(env: &SteamEnv) -> Result<(), String> {
         thread::sleep(Duration::from_millis(250));
     }
     Err("Steam did not close within 40 seconds; nothing was changed.".into())
+}
+
+/// Put Gantry into Steam's library as a non-Steam game (for Big Picture and the Steam Deck's game mode), for every
+/// Steam account on this computer. Steam has to be closed: it rewrites the file when it exits.
+fn add_gantry_to_steam(state: &SharedState, close_steam: bool) -> Result<String, String> {
+    let (env, games) = {
+        let st = read_state(state);
+        (st.steam_env.clone(), st.games.clone())
+    };
+    let configs: Vec<PathBuf> = env.localconfigs().iter().filter_map(|p| steamshortcut::path_beside(p)).collect();
+    if configs.is_empty() {
+        return Err("Steam's account folder was not found, so Gantry could not be added to Steam.".into());
+    }
+    let exe = selfupdate::target().or_else(|| std::env::current_exe().ok()).ok_or("Gantry could not tell where it is installed.")?;
+    let (exe_s, dir_s) = (exe.to_string_lossy().to_string(), exe.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default());
+    // read everything first: if any file is in a form we do not know, nothing is written
+    let mut todo = Vec::new();
+    for path in &configs {
+        let old = fs::read(path).unwrap_or_default();
+        match steamshortcut::has_gantry(&old, &exe_s) {
+            None => return Err("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.".into()),
+            Some(true) => {}
+            Some(false) => todo.push((path.clone(), old)),
+        }
+    }
+    if todo.is_empty() {
+        return Ok("Gantry is already in Steam's library.".into());
+    }
+    let mut restart = false;
+    if env.running() {
+        if !close_steam {
+            return Err("Steam is running. Close it first, then try again.".into());
+        }
+        if games.iter().any(procs::is_game_running) {
+            return Err("A game is running. Close it first: Steam would end it too.".into());
+        }
+        log(state, "INFO", "Closing Steam to add Gantry to its library...");
+        shutdown_steam(&env)?;
+        restart = true;
+    }
+    for (path, old) in todo {
+        let new = steamshortcut::add_gantry(&old, &exe_s, &dir_s, "--deck")?;
+        fsutil::atomic_write_kept(&path, new).map_err(|e| format!("Could not write Steam's shortcuts file: {}", e))?;
+    }
+    if restart && env.running.is_none() {
+        let mut c = Command::new("steam");
+        c.arg("-silent").stdout(Stdio::null()).stderr(Stdio::null());
+        spawn_reaped(c);
+    }
+    Ok("Gantry is in Steam's library now. It opens in controller mode from Big Picture and on a Steam Deck.".into())
 }
 
 /// Make Steam's launch options for `g` match rig's settings.
@@ -16048,6 +16107,41 @@ mod tests {
         assert!(last_log(&h).contains("stopped unexpectedly"), "{}", last_log(&h));
         assert_eq!(told(), 1, "the same words within a minute are one note");
         api(&h, "/api/open_crash_reports", json!({}));
+    }
+
+    #[test]
+    fn gantry_is_added_to_steams_library_only_while_steam_is_closed_and_only_to_a_file_it_understands() {
+        let h = harness("steamshortcut");
+        let cfg = h._dir.join("steam-acct/config");
+        fs::create_dir_all(&cfg).unwrap();
+        let file = cfg.join("shortcuts.vdf");
+        {
+            let mut st = h.state.write().unwrap();
+            st.steam_env.localconfig = Some(cfg.join("localconfig.vdf"));
+            st.steam_env.running = Some(true);
+        }
+        // Steam is open: nothing is written
+        api(&h, "/api/steam_shortcut", json!({}));
+        wait_until("told", || last_log(&h).contains("Steam is running"));
+        assert!(!file.exists());
+        // a file in a form nobody knows is left alone
+        h.state.write().unwrap().steam_env.running = Some(false);
+        fs::write(&file, b"not a shortcuts file").unwrap();
+        api(&h, "/api/steam_shortcut", json!({}));
+        wait_until("refused", || last_log(&h).contains("a form Gantry does not know"));
+        assert_eq!(fs::read(&file).unwrap(), b"not a shortcuts file");
+        // an empty folder gets the entry, with the program and controller mode
+        fs::remove_file(&file).unwrap();
+        api(&h, "/api/steam_shortcut", json!({}));
+        wait_until("added", || last_log(&h).contains("is in Steam's library now"));
+        let bytes = fs::read(&file).unwrap();
+        let exe = std::env::current_exe().unwrap().to_string_lossy().to_string();
+        assert_eq!(steamshortcut::has_gantry(&bytes, &exe), Some(true));
+        assert!(String::from_utf8_lossy(&bytes).contains("--deck"));
+        // again: it is there already, and the file is not written a second time
+        api(&h, "/api/steam_shortcut", json!({}));
+        wait_until("already", || last_log(&h).contains("already in Steam's library"));
+        assert_eq!(fs::read(&file).unwrap(), bytes);
     }
 
     #[test]

@@ -1,5 +1,12 @@
 # Changes
 
+## Next
+
+- **Gantry in your Steam library.** *Settings → Add Gantry to Steam* adds Gantry as a non-Steam game, so it opens from Big Picture
+  and from a Steam Deck's game mode (in controller mode). Steam has to be closed: Gantry closes it, adds the entry, and starts
+  it again, but refuses while a game is running. The old file is kept, nothing else in it is touched, and a file in a form
+  Gantry does not know is left alone.
+
 ## 5.5.0
 
 - **Search in Settings.** A box at the top of Settings keeps only the settings whose words match what you type
