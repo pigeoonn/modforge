@@ -1733,6 +1733,7 @@
 <div class="modal-backdrop" id="settingsModal" onclick="if (event.target === this) closeModals()">
   <div class="glass-card modal-window" style="width:min(640px,calc(94 * var(--vw)));">
     <div class="modal-hdr"><span>⚙ Settings</span><button class="btn" onclick="closeModals()">✕</button></div>
+    <input type="text" id="setSearch" class="mod-filter-input" style="z-index:2; width:100%; margin:0 0 8px" placeholder="Search the settings…" aria-label="Search the settings" autocomplete="off" oninput="settingsFilter()">
     <div id="settingsBody" data-dyn style="z-index:2; display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:0; padding-right:6px;"></div>
   </div>
 </div>
@@ -3218,8 +3219,30 @@
       (appState.update_ready ? `<div class="cp-note" style="color:var(--good, #10b981)">${escapeHtml(t('Gantry {} is in place. Close Gantry and open it again to use it.', appState.update_ready))}</div>` : appState.new_version && appState.can_self_update ? `<div class="cp-row" style="margin-top:6px"><button class="btn btn-heal" onclick='if (confirm(${JS(t('Put Gantry {} in place of this copy? It comes from the Gantry release on GitHub and its checksum is checked first. You close Gantry and open it again afterwards.', appState.new_version))})) { ipcSend("/api/self_update", {}); showToast(t("Downloading the new Gantry…")); }'>${escapeHtml(t('Update now'))}</button></div>` : '') +
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/self_update_check', {}); showToast(t('Looking for a newer Gantry…'))">${t('Check for a newer Gantry')}</button><button class="btn" onclick="tourStep = 0; closeModals(); showTour()">${t('Show the tour again')}</button><button class="btn" onclick="closeModals(); openWelcome()">${t('Check my games')}</button><button class="btn" onclick="closeModals(); openKeys()">${t('Keyboard shortcuts')}</button></div>` +
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'bug' })">${t('🐞 Report a problem')}</button><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'game' })">${t('🎮 Ask for a game')}</button><button class="btn" onclick="openWeb('https://github.com/pigeoonn/gantry')">${t('↗ Gantry on GitHub')}</button></div>`;
+    document.getElementById('setSearch').value = '';
     document.getElementById('settingsModal').classList.add('open');
     syncInfoFill();
+  }
+  // type what a setting does; only the settings whose words match stay (the version line and the buttons stay with them)
+  function settingsFilter() {
+    const q = document.getElementById('setSearch').value.trim().toLowerCase();
+    const words = q.split(/\s+/).filter(Boolean);
+    let shown = 0;
+    [...document.getElementById('settingsBody').children].forEach(c => {
+      const text = (c.textContent + ' ' + [...c.querySelectorAll('option')].map(o => o.textContent).join(' ')).toLowerCase();
+      const hit = words.every(w => text.includes(w));
+      c.style.display = hit ? '' : 'none';
+      if (hit) shown++;
+    });
+    let none = document.getElementById('setNone');
+    if (!none) {
+      none = document.createElement('div');
+      none.id = 'setNone';
+      none.className = 'cp-note';
+      document.getElementById('settingsBody').after(none);
+    }
+    none.textContent = words.length && !shown ? t('No setting matches that.') : '';
+    none.style.display = none.textContent ? '' : 'none';
   }
 
 
