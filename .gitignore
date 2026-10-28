@@ -7,3 +7,7 @@
 packaging/arch/pkg/
 packaging/arch/src/
 *.pkg.tar.*
+
+# Python cache
+__pycache__/
+*.pyc

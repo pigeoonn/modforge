@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# ModForge Launcher Script
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PYTHONPATH="$DIR:$PYTHONPATH"
+exec python3 "$DIR/modforge_app.py" "$@"

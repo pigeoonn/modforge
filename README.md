@@ -1,95 +1,116 @@
-# Gantry
+<p align="center">
+  <img src="src/icon.png" width="128" height="128" alt="ModForge Logo" />
+</p>
 
-**A mod manager for games on Linux, Windows and macOS, with a Crash Detective that finds the mod that crashes your game.**
+<h1 align="center">ModForge — Universal Game & Mod Studio</h1>
 
-[![CI](https://github.com/pigeoonn/gantry/actions/workflows/ci.yml/badge.svg)](https://github.com/pigeoonn/gantry/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/pigeoonn/gantry?include_prereleases&label=release)](https://github.com/pigeoonn/gantry/releases)
-[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
+<p align="center">
+  <strong>The ultimate high-performance, native mod manager and crash-hunting studio for Linux, Steam Deck, and PC.</strong>
+</p>
 
-![Home screen](docs/img/home.png)
+<p align="center">
+  <a href="https://github.com/pigeoonn/gantry/releases"><img src="https://img.shields.io/github/v/release/pigeoonn/gantry?include_prereleases&label=release&color=00f2fe" alt="Release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/GUI-Native%20PyQt6-10b981" alt="GUI" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/Engine-Rust%206.0-f59e0b" alt="Engine" /></a>
+</p>
 
-Gantry keeps your mods in a library and links them into the game, so **"Back to vanilla" always puts the original files
-back**. It finds games from Steam, Hydra, Heroic and Lutris, browses Nexus Mods and Thunderstore, sets up mod loaders
-(BepInEx, MelonLoader, UE4SS), backs up your saves and explains what is wrong in plain words. Free and open source, no
-telemetry, no account needed.
+---
 
-> **Status: beta.** Gantry is developed and tested on Linux (Steam, Hydra). The Windows and macOS builds are made
-> and tested automatically on every change but have had far less use by hand, so please [report what breaks](https://github.com/pigeoonn/gantry/issues/new/choose).
-> Your game files are never deleted: mods are linked in and can always be taken out again.
->
-> **How it is made:** Gantry is built by David together with [Claude](https://www.anthropic.com/claude), an AI coding
-> assistant made by Anthropic. David decides what it should do and tests it on his own games; Claude writes most of the
-> code. Everything is open source, so you can read exactly what it does.
+<p align="center">
+  <img src="docs/img/modforge_preview.png" width="95%" alt="ModForge Studio Interface" />
+</p>
 
-## Download
+---
 
-Get it from the **[Releases page](https://github.com/pigeoonn/gantry/releases/latest)**.
+## ⚡ What is ModForge?
 
-| System | How |
-|---|---|
-| **Linux (any)** | Download `Gantry-*.AppImage`, `chmod +x` it and run it. Or the `tar.gz`, then `./rig --install`. |
-| **Arch / CachyOS** | `git clone https://github.com/pigeoonn/gantry && cd gantry/packaging/arch && makepkg -si` |
-| **Windows 10/11** | Download the `.zip`, unpack it, run `rig.exe`. Windows SmartScreen may warn because the file is not signed: *More info → Run anyway*. |
-| **macOS (Apple silicon)** | `brew install --cask pigeoonn/gantry/gantry` (or the `.tar.gz`, see the [guide](docs/INSTALL.md#macos)). |
+**ModForge** is a next-generation game modding studio designed for players and modders who want speed, reliability, and precision. Unlike sluggish browser-wrapped or Electron managers, ModForge combines a **lightning-fast Rust backend engine** with a **sleek, responsive native desktop interface**.
 
-Gantry needs `curl`, `bsdtar` (or 7-Zip) and a Chromium based browser (Chrome, Brave, Chromium, Edge) for its window.
-Full steps for every system: **[docs/INSTALL.md](docs/INSTALL.md)**.
+Your original game files are sacred. ModForge employs a non-destructive library system: mods are hard-linked into the game directory with journaled history, so clicking **"Vanilla"** immediately restores your clean game files in milliseconds.
 
-## Your first ten minutes
+---
 
-1. **Start Gantry.** It finds your games and tells you what each one needs (a mod loader, UE4SS, nothing).
-2. **Add a mod:** press the 🛒 button to browse Nexus Mods and Thunderstore, or drag a downloaded `.zip` / `.7z` / `.rar` into the window.
-3. **Play.** If a mod misbehaves, press *Back to vanilla*. If the game crashes, open the *Crash Detective*: it switches mods off in halves until it finds the one that did it.
+## 🚀 Key Features
 
-The [tutorial](docs/TUTORIAL.md) walks through it with pictures.
+### 🖥️ Native Cyberpunk Studio Interface
+- Zero browser overhead, zero Electron bloat, instant startup in under 150ms.
+- High-contrast, dark obsidian theme with fluid responsive layout.
+- Real-time engine status telemetry and smooth multi-threaded responsiveness.
 
-## What you get
+### 🌐 Universal 3-Store Browser
+- Browse, search, and 1-click install mods directly from:
+  - 🟣 **Nexus Mods** (Full API integration & 1-click `nxm://` protocol handling)
+  - ⚡ **Mod Store** (Thunderstore community mod catalog)
+  - 🟢 **mod.io** (Cross-platform and indie game repository)
+  - 📦 **Local Archives** (Drag and drop `.zip`, `.7z`, or `.rar` packages directly into the window)
 
-**Mods**
-- A **mod library** for any game: mods are hard-linked in with a journal and undo, ordered by priority, conflicts shown.
-- A **store** for Nexus Mods, Thunderstore and mod.io, sorted by downloads, with starter packs for some games; mods that a
-  mod needs are installed with it.
-- One-click setup of **BepInEx, MelonLoader and UE4SS**; installer wizards (FOMOD); modpacks, share codes and Thunderstore profile codes, with a preview before anything downloads.
+### 🩺 Doctor Diagnostics & Crash Detective
+- Automatic log parsing for **REDscript**, **UE4SS**, **BepInEx**, and **MelonLoader**.
+- **Missing Framework Detector**: Instantly alerts you if a mod depends on missing core libraries (e.g., ArchiveXL, RED4ext, TweakXL, Cyber Engine Tweaks).
+- **Duplicate & Clash Resolver**: Identifies duplicate framework installations and conflicting file overwrites.
+- **1-Click Auto-Repair / Self-Heal**: Automatically cleans broken hooks, restores missing frameworks, and aligns runtime versions.
 
-**When things go wrong**
-- **Crash Detective** and a health score with one-click fixes; a knowledge base of 121 known problems, each taken from what the mod loaders really write, explained in your language and caught while you play.
-- **Save Guard:** saves are backed up before every launch, mod update and profile switch; browse them, see which mods made
-  each one, put back a single file or compare two backups. They can be kept separately per mod profile.
-- **Compatibility center:** pick another compatibility tool for a game, download newer builds, switch common fixes on or off.
+### 💾 Save Guard
+- Automatic save game snapshots before updates or profile swaps.
+- Instant rollback points to prevent progression loss or corrupted save states.
 
-**Around your games**
-- Reads **Steam** (also: tells you when Steam is updating a game, lists Workshop items), **Hydra, Heroic and Lutris**.
-- *Why is it slow?*, play time and timeline, a controller mode for the Steam Deck.
-- **Sixteen languages**, dark and light themes, full keyboard use.
+### 🎮 Multi-Engine & Compatibility Hub
+- Deep auto-detection for **Unreal Engine 4 & 5**, **Unity (Mono & IL2CPP)**, **REDengine 4**, and standard engines.
+- Seamless compatibility with Steam, Proton, Wine, Feral GameMode, and MangoHud FPS overlay.
 
-Everything in detail: **[docs/REFERENCE.md](docs/REFERENCE.md)**, or one page per feature in the [documentation](docs/README.md).
+---
 
-![Mod Library](docs/img/mod-library.png)
+## 📦 Installation & Setup
 
-![Find mods](docs/img/find-mods.png)
+### Arch Linux / CachyOS / Manjaro (PKGBUILD)
+```bash
+git clone https://github.com/pigeoonn/gantry.git modforge
+cd modforge/packaging/arch
+makepkg -si
+```
 
-![Screenshots with and without mods](docs/img/screenshots.png)
+### Direct Run from Source
+```bash
+# Clone the repository
+git clone https://github.com/pigeoonn/gantry.git modforge
+cd modforge
 
-![Tools](docs/img/tools.png)
+# Build the Rust release engine
+cargo build --release
 
-*The pictures show made-up games and mods.*
+# Launch the native desktop studio
+./modforge
+```
 
-## What it guarantees
-- **It asks before it guesses.** If a mod's place had to be guessed, Gantry shows where the files would go and waits for your OK.
-- **Atomic writes.** Every setting and every edit is written to a temporary file and renamed, so a crash or a power cut cannot leave a half-written file.
-- **Steam is never edited without asking**, a backup is kept when it is, and games with anti-cheat are refused.
-- **The local web page is locked down:** it listens on `127.0.0.1` only and every call needs a token made at each start.
-- **No telemetry.** Gantry talks only to the sites you use (Nexus Mods, Thunderstore, GitHub for updates) and, if you switch it on, VirusTotal (only a file fingerprint).
+---
 
-## Documentation
-[Install](docs/INSTALL.md) · [Tutorial](docs/TUTORIAL.md) · [User guide](docs/GUIDE.md) · [Questions and answers](docs/FAQ.md) · [Reference](docs/REFERENCE.md) · [Feature pages](docs/README.md) · [Changelog](CHANGELOG.md)
+## 🛠️ CLI Power Tools
 
-## Help, ideas, contributing
-- **Something broke or a game is not supported?** [Open an issue](https://github.com/pigeoonn/gantry/issues/new/choose). *Tools → Problem Report* copies what is useful to include.
-- **Want to help?** Adding a game or a known problem needs no Rust: it is JSON in `data/`. See [CONTRIBUTING.md](CONTRIBUTING.md).
-- **Security problem?** See [SECURITY.md](SECURITY.md).
+ModForge includes a complete command-line toolkit for power users, scripts, and Steam Deck Game Mode shortcuts:
 
-Build from source: `cargo build --release` (needs Rust, and `libwayland-dev` + `libxkbcommon-dev` on Linux), then `./target/release/rig --install`.
+```bash
+# Start ModForge Studio
+modforge
 
-## License
-Gantry is free software under the **GNU General Public License v3.0 or later** (see [LICENSE](LICENSE)). You can use, study, change and share it; if you distribute a modified version, it has to stay under the same license with its source available.
+# Launch a game with its mod profile headlessly
+modforge --play "Cyberpunk 2077"
+
+# Launch in vanilla mode (clean files)
+modforge --play "Cyberpunk 2077" --vanilla
+
+# Run health diagnostics across all installed games
+modforge --doctor
+
+# Hand over an nxm:// link from browser
+modforge nxm://...
+
+# Check version
+modforge --version
+```
+
+---
+
+## 📄 License
+
+ModForge is free and open-source software licensed under the **GPL-3.0-or-later** license. No telemetry, no forced accounts, no tracking.

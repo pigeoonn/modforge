@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=ModForge
+GenericName=Universal Game & Mod Studio
+Comment=Universal Game & Mod Studio for Linux, Steam Deck & PC
+Exec=modforge
+Icon=modforge
+Terminal=false
+Categories=Game;Utility;
+Keywords=modforge;mods;modding;steam;proton;wine;games;trainer;crash;
+StartupNotify=false
+StartupWMClass=ModForge

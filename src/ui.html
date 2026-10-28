@@ -5384,8 +5384,8 @@
   }
 
 
-  // ---------- The mod store: Nexus Mods and Thunderstore as one shop window ----------
-  let storeSort = 'popular', storeSource = 'both', storeCat = '', storeHide = false, storeLibs = false, storeNext = { n: 0, t: 0 }, storeMore = false, storeBusy = false, storeCats = [], storeSeq = 0, storeIO = null;
+  // ---------- The mod store: Nexus Mods, Mod Store, and mod.io ----------
+  let storeSort = 'popular', storeSource = 'all', storeCat = '', storeHide = false, storeLibs = false, storeNext = { n: 0, t: 0 }, storeMore = false, storeBusy = false, storeCats = [], storeSeq = 0, storeIO = null;
   const STORE_SORTS = () => [['starter', t('Starter pack')], ['popular', t('Most downloaded')], ['lately', t('Popular lately')], ['endorsed', t('Most liked')], ['new', t('New')], ['updated', t('Recently updated')], ['saved', t('Saved')]];
   function renderStoreBar() {
     const bar = document.getElementById('storeBar');
@@ -5393,7 +5393,7 @@
     const games = appState.games.map((g, i) => ({ g, i })).filter(x => x.g.is_installed !== false);
     const gameSel = games.length > 1 ? `<select class="proton-select" title="${escapeHtml(t('Find mods for this game'))}" onchange="storeSwitchGame(this.value)">${games.map(({ g, i }) => `<option value="${i}" ${i === appState.selected_idx ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')}</select>` : '';
     bar.innerHTML = `${gameSel}<span class="group">${STORE_SORTS().map(([k, l]) => chip(k, l, storeSort, 'setStoreSort')).join('')}</span>
-      <span class="group">${[['both', t('Both')], ['nexus', 'Nexus Mods'], ['thunder', 'Thunderstore'], ['modio', 'mod.io']].map(([k, l]) => chip(k, l, storeSource, 'setStoreSource')).join('')}</span>
+      <span class="group">${[['all', t('All')], ['nexus', 'Nexus Mods'], ['thunder', 'Mod Store'], ['modio', 'mod.io']].map(([k, l]) => chip(k, l, storeSource, 'setStoreSource')).join('')}</span>
       ${storeCats.length > 1 ? `<select class="proton-select" aria-label="${escapeHtml(t('Category'))}" onchange="setStoreCat(this.value)"><option value="">${t('Every category')}</option>${storeCats.map(c => `<option value="${escapeHtml(c)}" ${c === storeCat ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>` : ''}
       <label class="ml-chip ${storeHide ? 'on' : ''}" style="cursor:pointer"><input type="checkbox" style="display:none" ${storeHide ? 'checked' : ''} onchange="storeHide = this.checked; storeReload()">${t('Hide mods I have')}</label>
       <label class="ml-chip ${storeLibs ? 'on' : ''}" style="cursor:pointer" title="${escapeHtml(t('BepInEx, mod managers and other packages that mods need.'))}"><input type="checkbox" style="display:none" ${storeLibs ? 'checked' : ''} onchange="storeLibs = this.checked; storeReload()">${t('Show libraries and tools')}</label>`;
@@ -5510,7 +5510,7 @@
     if (!list.querySelector('.s-card')) {
       list.classList.remove('store-grid');
       const anyGame = (d.notes || []).some(n => n.source === 'game');
-      list.innerHTML = `<div class="lib-empty">${notes.length && anyGame ? notes[0] : (notes.length ? '' : t('Nothing found.'))}${!anyGame && !notes.length ? `<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn" onclick="document.getElementById('tsSearch').value=''; storeCat=''; storeSource='both'; storeHide=false; storeReload()">${t('Clear the filters')}</button></div>` : ''}</div>`;
+      list.innerHTML = `<div class="lib-empty">${notes.length && anyGame ? notes[0] : (notes.length ? '' : t('Nothing found.'))}${!anyGame && !notes.length ? `<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn" onclick="document.getElementById('tsSearch').value=''; storeCat=''; storeSource='all'; storeHide=false; storeReload()">${t('Clear the filters')}</button></div>` : ''}</div>`;
       return;
     }
     if (storeMore) list.insertAdjacentHTML('beforeend', `<div class="s-more"><button class="btn" onclick="storeLoad(false)">${t('Show more')}</button></div>`);

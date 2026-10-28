@@ -2202,7 +2202,7 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
     let (mut more_n, mut more_t) = (false, false);
     let want_nexus = !matches!(ask.source.as_str(), "thunder" | "modio");
     let want_thunder = !matches!(ask.source.as_str(), "nexus" | "modio");
-    let want_modio = ask.source == "modio";
+    let want_modio = matches!(ask.source.as_str(), "modio" | "both" | "all");
     let have_modio: HashSet<u64> = library_of(g).map(|l| l.mods().iter().filter_map(|m| m.modio.as_ref().map(|r| r.mod_id)).collect()).unwrap_or_default();
 
     if want_nexus {
@@ -2312,7 +2312,7 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
         _ => cards.sort_by_key(|c| std::cmp::Reverse(c["downloads"].as_u64().unwrap_or(0))),
     }
     // a game that is not on Nexus Mods is no problem when the other site has mods for it
-    if ask.source == "both" && !cards.is_empty() {
+    if (ask.source == "both" || ask.source == "all") && !cards.is_empty() {
         notes.retain(|n| !(n["source"] == "nexus" && n["need_domain"].as_bool().unwrap_or(false)));
     }
     json!({ "cards": cards, "next": { "n": next_n, "t": next_t }, "more": more_n || more_t, "categories": categories, "notes": notes, "premium": premium, "adult": adult })
@@ -5022,7 +5022,7 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             };
             let n = |k: &str| query_param(&query, k).and_then(|v| v.parse::<usize>().ok()).unwrap_or(0);
             let ask = StoreAsk {
-                source: query_param(&query, "source").unwrap_or_else(|| "both".into()),
+                source: query_param(&query, "source").unwrap_or_else(|| "all".into()),
                 sort: query_param(&query, "sort").unwrap_or_else(|| "popular".into()),
                 query: query_param(&query, "q").unwrap_or_default(),
                 category: query_param(&query, "category").unwrap_or_default(),
@@ -10877,7 +10877,7 @@ pub fn serve(server: Server, state: SharedState, notifier: Arc<EventNotifier>, c
     }
 }
 
-const USAGE: &str = "Gantry - mod, trainer and crash-hunting hub for Proton games\n\nUSAGE:\n  rig              start the app (or open a window on the running one)\n  rig --play GAME [--vanilla | --profile NAME]   start a game (id or name) with its mods, without a window\n  rig --doctor    print the state of every installed game (also what to attach to a bug report)\n  rig --deck      full-screen controller mode (Steam Deck / couch)\n  rig nxm://...   hand a Nexus Mods link to Gantry (used by the website's download button)\n  rig --install   add menu entry, icon and ~/.local/bin/rig for this binary\n  rig --register-nxm / --unregister-nxm   take over / give back nxm:// links\n  rig --uninstall remove what --install created\n  rig --version   print the version\n  rig --help      this text\n";
+const USAGE: &str = "ModForge - Universal Game & Mod Studio\n\nUSAGE:\n  modforge              start ModForge (or connect to running instance)\n  modforge --play GAME [--vanilla | --profile NAME]   start a game (id or name) with its mods, without a window\n  modforge --doctor     print the state of every installed game (diagnostics & mod health)\n  modforge --deck       full-screen controller mode (Steam Deck / couch)\n  modforge nxm://...    handle Nexus Mods 1-click download\n  modforge --install    add menu entry, icon and ~/.local/bin/modforge for this binary\n  modforge --register-nxm / --unregister-nxm   take over / give back nxm:// links\n  modforge --uninstall  remove what --install created\n  modforge --version    print the version\n  modforge --help       this text\n";
 
 // ───────────────────────────── rig --play ─────────────────────────────
 
@@ -10993,9 +10993,9 @@ fn trainer_line(state: &SharedState, g: &GameEntry) -> Value {
     json!({ "file": file, "exists": Path::new(&tp).is_file(), "runs_with": with })
 }
 
-/// The text of `rig --doctor`.
+/// The text of `modforge --doctor`.
 fn doctor_text(d: &Value) -> String {
-    let mut out = format!("Gantry {} on {}\n\n", d["version"].as_str().unwrap_or(""), d["os"].as_str().unwrap_or(""));
+    let mut out = format!("ModForge {} on {}\n\n", d["version"].as_str().unwrap_or(""), d["os"].as_str().unwrap_or(""));
     for g in d["games"].as_array().into_iter().flatten() {
         let issues = g["issues"].as_array().cloned().unwrap_or_default();
         let worst = issues.iter().filter_map(|i| i["level"].as_str()).map(level_rank).max().unwrap_or(0);
@@ -11013,7 +11013,7 @@ fn doctor_text(d: &Value) -> String {
             let args: Vec<&str> = i["args"].as_array().into_iter().flatten().filter_map(Value::as_str).filter(|a| !a.is_empty()).collect();
             // a known problem from the logs has a title and the log line that showed it; the others a short code
             let what = i["title"].as_str().map(str::to_string).unwrap_or_else(|| match i["code"].as_str().unwrap_or("") {
-                "launch_option" => "launch_option: Steam's launch options lack what the mods need (open Gantry, then Doctor, Close Steam & apply)".to_string(),
+                "launch_option" => "launch_option: Steam's launch options lack what the mods need (open ModForge, then Doctor, Close Steam & apply)".to_string(),
                 "needs_framework" => format!("needs_framework: the mods need {} and the game does not have it", args.join(", ")),
                 "duplicate_mod" => format!("duplicate_mod: installed more than once: {}", args.join("; ")),
                 code => format!("{}{}", code, if args.is_empty() { String::new() } else { format!(": {}", args.join(", ")) }),
@@ -11024,11 +11024,11 @@ fn doctor_text(d: &Value) -> String {
             }
         }
     }
-    out.push_str("\nMore: open Gantry and use Tools > Problem Report for one game.\n");
+    out.push_str("\nMore: open ModForge to manage and inspect all games.\n");
     out
 }
 
-/// `rig --doctor`: ask a running Gantry (or one started without a window) about every installed game and print it.
+/// `modforge --doctor`: ask a running ModForge (or one started without a window) about every installed game and print it.
 fn cli_doctor() -> i32 {
     let port = server_port();
     let mut child = None;
@@ -11038,7 +11038,7 @@ fn cli_doctor() -> i32 {
             thread::sleep(Duration::from_millis(200));
             probe_existing_instance(port).is_some()
         }) {
-            eprintln!("rig: could not start Gantry.");
+            eprintln!("modforge: could not start ModForge engine.");
             if let Some(c) = child.as_mut() {
                 let _ = c.kill();
             }
@@ -11047,13 +11047,13 @@ fn cli_doctor() -> i32 {
     }
     let host = format!("127.0.0.1:{port}");
     let answer = (|| -> Result<Value, String> {
-        let (_, page) = local_http(port, &format!("GET / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")).ok_or("Gantry does not answer.")?;
-        let token = page.split("RIG_TOKEN = \"").nth(1).and_then(|r| r.split('"').next()).ok_or("That is not Gantry.")?.to_string();
-        let (code, text) = local_http(port, &format!("GET /api/doctor_all HTTP/1.1\r\nHost: {host}\r\nX-Rig-Token: {token}\r\nConnection: close\r\n\r\n")).ok_or("Gantry stopped answering.")?;
+        let (_, page) = local_http(port, &format!("GET / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")).ok_or("ModForge engine does not answer.")?;
+        let token = page.split("RIG_TOKEN = \"").nth(1).and_then(|r| r.split('"').next()).ok_or("That is not ModForge.")?.to_string();
+        let (code, text) = local_http(port, &format!("GET /api/doctor_all HTTP/1.1\r\nHost: {host}\r\nX-Rig-Token: {token}\r\nConnection: close\r\n\r\n")).ok_or("ModForge engine stopped answering.")?;
         if code != 200 {
-            return Err(format!("Gantry refused the request ({code})."));
+            return Err(format!("ModForge engine refused the request ({code})."));
         }
-        serde_json::from_str(&text).map_err(|_| "Gantry sent an unreadable answer.".to_string())
+        serde_json::from_str(&text).map_err(|_| "ModForge engine sent an unreadable answer.".to_string())
     })();
     if let Some(c) = child.as_mut() {
         let _ = c.kill();
@@ -11065,7 +11065,7 @@ fn cli_doctor() -> i32 {
             0
         }
         Err(e) => {
-            eprintln!("rig: {e}");
+            eprintln!("modforge: {e}");
             1
         }
     }
@@ -11103,7 +11103,7 @@ fn cli_play(args: &[String]) -> i32 {
                 .spawn()
         });
         if !matches!(spawned, Some(Ok(_))) {
-            eprintln!("rig: could not start Gantry.");
+            eprintln!("modforge: could not start ModForge engine.");
             return 1;
         }
         let up = (0..100).any(|_| {
@@ -11111,7 +11111,7 @@ fn cli_play(args: &[String]) -> i32 {
             probe_existing_instance(port).is_some()
         });
         if !up {
-            eprintln!("rig: Gantry did not start.");
+            eprintln!("modforge: ModForge engine did not start.");
             return 1;
         }
     }
@@ -11121,13 +11121,13 @@ fn cli_play(args: &[String]) -> i32 {
             0
         }
         Err(e) => {
-            eprintln!("rig: {e}");
+            eprintln!("modforge: {e}");
             1
         }
     }
 }
 
-/// A Gantry started by `rig --play` has no window to close: it ends itself a little after the game does
+/// A ModForge instance started by `modforge --play` has no window to close: it ends itself a little after the game does
 /// (or when no game ever started).
 fn spawn_exit_after_play(state: Weak<RwLock<AppState>>) {
     thread::spawn(move || {
@@ -11174,7 +11174,7 @@ fn handle_cli(args: Vec<String>) -> Option<i32> {
                         Some(0)
                     }
                     Err(e) => {
-                        eprintln!("rig: {}", e);
+                        eprintln!("modforge: {}", e);
                         Some(1)
                     }
                 }
@@ -11191,7 +11191,7 @@ fn handle_cli(args: Vec<String>) -> Option<i32> {
             None
         }
         Some("--version") | Some("-V") => {
-            println!("rig {}", env!("CARGO_PKG_VERSION"));
+            println!("ModForge {}", env!("CARGO_PKG_VERSION"));
             Some(0)
         }
         Some("--help") | Some("-h") => {
@@ -11202,11 +11202,11 @@ fn handle_cli(args: Vec<String>) -> Option<i32> {
             Ok(steps) => {
                 steps.iter().for_each(|s| println!("{}", s));
                 install::refresh_desktop_caches(&home_dir());
-                println!("done. Search for \"Gantry\" in your application menu.");
+                println!("done. Search for \"ModForge\" in your application menu.");
                 0
             }
             Err(e) => {
-                eprintln!("rig: install failed: {}", e);
+                eprintln!("modforge: install failed: {}", e);
                 1
             }
         }),
@@ -11220,7 +11220,7 @@ fn handle_cli(args: Vec<String>) -> Option<i32> {
             Some(0)
         }
         Some(other) => {
-            eprintln!("rig: unknown option '{}'\n\n{}", other, USAGE);
+            eprintln!("modforge: unknown option '{}'\n\n{}", other, USAGE);
             Some(2)
         }
     }
@@ -11300,7 +11300,7 @@ fn main() {
 
     let ctx = Arc::new(ServerCtx::new(server_port(), fsutil::random_token(), build));
     let url = format!("http://127.0.0.1:{}", server_port());
-    println!("⚡ Gantry running at {}", url);
+    println!("⚡ ModForge running at {}", url);
     if let Some(u) = &nxm_arg {
         match nxm_request(&state, u) {
             Ok(m) => log(&state, "INFO", m),
@@ -15955,7 +15955,7 @@ mod tests {
         let row = d["games"].as_array().unwrap().iter().find(|g| g["name"] == "Plain Game").unwrap().clone();
         assert_eq!((row["mods"].as_u64(), row["mods_on"].as_u64()), (Some(1), Some(1)));
         let text = doctor_text(&d);
-        assert!(text.starts_with(&format!("Gantry {} on ", env!("CARGO_PKG_VERSION"))), "{text}");
+        assert!(text.starts_with(&format!("ModForge {} on ", env!("CARGO_PKG_VERSION"))), "{text}");
         assert!(text.contains("Plain Game") && text.contains("1 of 1 mods on") && text.contains("drift"), "{text}");
         assert!(text.contains("[warn]"), "{text}");
         assert_eq!(handle_cli(vec!["--help".into()]), Some(0));

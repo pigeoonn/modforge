@@ -811,6 +811,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "modforge"
+version = "6.0.0"
+dependencies = [
+ "libc",
+ "memchr",
+ "memmap2",
+ "notify",
+ "rayon",
+ "regex",
+ "rfd",
+ "roxmltree",
+ "same-file",
+ "serde",
+ "serde_json",
+ "tiny_http",
+ "walkdir",
+ "windows-sys 0.59.0",
+ "winresource",
+]
+
+[[package]]
 name = "notify"
 version = "6.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1121,27 +1142,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "rig"
-version = "5.5.0"
-dependencies = [
- "libc",
- "memchr",
- "memmap2",
- "notify",
- "rayon",
- "regex",
- "rfd",
- "roxmltree",
- "same-file",
- "serde",
- "serde_json",
- "tiny_http",
- "walkdir",
- "windows-sys 0.59.0",
- "winresource",
 ]
 
 [[package]]

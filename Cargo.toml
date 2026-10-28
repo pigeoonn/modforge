@@ -1,10 +1,10 @@
 [package]
-name = "rig"
-version = "5.5.0"
+name = "modforge"
+version = "6.0.0"
 edition = "2021"
 authors = ["David"]
 license = "GPL-3.0-or-later"
-description = "Gantry: mod manager for games, with a Crash Detective that finds the mod that crashes your game"
+description = "ModForge: Universal Game & Mod Studio for Linux, Steam Deck & PC"
 repository = "https://github.com/pigeoonn/gantry"
 homepage = "https://github.com/pigeoonn/gantry"
 readme = "README.md"

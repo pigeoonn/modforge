@@ -210,7 +210,7 @@ mod tests {
             && u.contains(' ')
             && u.chars().next().map(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '{' || c == '\'' || c == '"').unwrap_or(false)
             && u.as_bytes().windows(3).any(|w| w.iter().all(|b| b.is_ascii_lowercase()))
-            && !["HTTP/1", "Gantry - mod", "Content-", "[Desktop"].iter().any(|n| u.contains(n))
+            && !["HTTP/1", "Gantry", "ModForge", "Content-", "[Desktop"].iter().any(|n| u.contains(n))
     }
 
     /// Technical strings that are deliberately not translated: protocol and log markers, parser
@@ -218,7 +218,15 @@ mod tests {
     const EXEMPT: &[&str] = &[
         "UserLocalConfigStore is not a block",
         "Gantry {} on {}",
+        "ModForge {}",
+        "ModForge {} on {}",
         "More: open Gantry and use Tools > Problem Report for one game.",
+        "More: open ModForge to manage and inspect all games.",
+        "ModForge engine does not answer.",
+        "ModForge engine refused the request ({code}).",
+        "ModForge engine sent an unreadable answer.",
+        "ModForge engine stopped answering.",
+        "That is not ModForge.",
         "{mark} {} ({}{}) {} of {} mods on",
         "Steam or custom",
         "Complete Edition",

@@ -1,13 +1,13 @@
-# Build and install Gantry from this checkout:
+# Build and install ModForge from this checkout:
 #   cd packaging/arch && makepkg -si
-pkgname=gantry
-pkgver=5.5.0
+pkgname=modforge
+pkgver=6.0.0
 pkgrel=1
-pkgdesc='Mod, trainer and crash-hunting hub for games on Linux'
+pkgdesc='Universal Game & Mod Studio for Linux, Steam Deck & PC'
 arch=('x86_64')
 url='https://github.com/pigeoonn/gantry'
 license=('GPL-3.0-or-later')
-depends=('gcc-libs' 'glibc' 'curl' 'xdg-utils' 'libarchive' 'wayland' 'libxkbcommon')
+depends=('gcc-libs' 'glibc' 'curl' 'xdg-utils' 'libarchive' 'wayland' 'libxkbcommon' 'python' 'python-pyqt6' 'python-requests')
 makedepends=('cargo')
 optdepends=(
   'p7zip: install .7z and .rar mods'
@@ -16,7 +16,6 @@ optdepends=(
   'mangohud: performance overlay'
   'libnotify: desktop notifications (notify-send)'
   'steam: sync launch options for Steam games'
-  'chromium: app window for the interface (any Chromium based browser works)'
 )
 
 # The sources are the repository this file lives in (packaging/arch -> repository root).
@@ -29,12 +28,12 @@ build() {
 }
 
 package() {
-  install -Dm755 "$srcdir/target/release/rig" "$pkgdir/usr/bin/rig"
-  install -Dm644 "$_root/packaging/gantry.desktop" "$pkgdir/usr/share/applications/gantry.desktop"
-  install -Dm644 "$_root/src/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/gantry.png"
-  install -Dm644 "$_root/src/icon.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/gantry.svg"
+  install -Dm755 "$srcdir/target/release/modforge" "$pkgdir/usr/bin/modforge-engine"
+  ln -sf /usr/bin/modforge-engine "$pkgdir/usr/bin/rig"
+  install -Dm755 "$_root/modforge_app.py" "$pkgdir/usr/share/modforge/modforge_app.py"
+  install -Dm755 "$_root/modforge" "$pkgdir/usr/bin/modforge"
+  install -Dm644 "$_root/packaging/modforge.desktop" "$pkgdir/usr/share/applications/modforge.desktop"
+  install -Dm644 "$_root/src/icon.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/modforge.png"
   install -Dm644 "$_root/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 "$_root/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
-  install -Dm644 "$_root/docs/GUIDE.md" "$pkgdir/usr/share/doc/$pkgname/GUIDE.md"
-  install -Dm644 "$_root/docs/INSTALL.md" "$pkgdir/usr/share/doc/$pkgname/INSTALL.md"
 }
