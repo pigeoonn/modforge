@@ -6896,6 +6896,16 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             if let Some(g) = selected_game(state) {
                 wipe_mods(&g);
                 RigEngine::invalidate_ue_bin_memo();
+                {
+                    let mut st = write_state(state);
+                    st.mods.clear();
+                    let idx = st.selected_idx;
+                    if let Some(gm) = st.games.get_mut(idx) {
+                        gm.mod_count = 0;
+                        gm.refresh_flags();
+                    }
+                    st.notifier.bump();
+                }
                 refresh_mods_shared(state);
                 log(state, "WARN", "Wiped UE4SS and all installed mods cleanly.");
             }
@@ -7118,25 +7128,100 @@ fn add_custom_game(state: &SharedState, exe: &Path) {
 
 fn wipe_mods(g: &GameEntry) {
     let gdir = PathBuf::from(&g.game_dir);
-    if let Some(ue_bin) = RigEngine::find_ue_bin_dir(&gdir) {
-        for f in [
-            "dwmapi.dll",
-            "dwmapi.dll.disabled",
-            "UE4SS.dll",
-            "UE4SS.log",
-            "UE4SS-settings.ini",
-            "VTableLayout.ini",
-            "MemberVariableLayout.ini",
-        ] {
-            let _ = fs::remove_file(ue_bin.join(f));
+    if !gdir.is_dir() {
+        return;
+    }
+
+    // 1. Remove every mod currently listed by ModManager::list_mods(g).
+    // This directly removes discovered LUA folders, PAK files, and DLL mod files.
+    for m in ModManager::list_mods(g) {
+        if m.path.is_dir() {
+            let _ = fs::remove_dir_all(&m.path);
+        } else if m.path.is_file() {
+            let _ = fs::remove_file(&m.path);
         }
-        for d in ["ue4ss", "Mods", "VTableLayoutTemplates", "MemberVarLayoutTemplates"] {
-            let _ = fs::remove_dir_all(ue_bin.join(d));
+        if let Some(parent) = m.path.parent() {
+            let pname = parent.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+            if pname == "~mods" || pname == "logicmods" {
+                let _ = fs::remove_dir_all(parent);
+            }
         }
     }
+
+    // 2. Identify all candidate binary/root directories
+    let mut bin_targets = vec![gdir.clone()];
+    if let Some(ue_bin) = RigEngine::find_ue_bin_dir(&gdir) {
+        if !bin_targets.contains(&ue_bin) {
+            bin_targets.push(ue_bin);
+        }
+    }
+    if !g.bin_dir.is_empty() {
+        let bdir = PathBuf::from(&g.bin_dir);
+        if bdir.is_dir() && !bin_targets.contains(&bdir) {
+            bin_targets.push(bdir);
+        }
+    }
+    for sub in ["bin", "bin/x64", "Binaries/Win64", "Binaries/WinGDK"] {
+        let p = gdir.join(sub);
+        if p.is_dir() && !bin_targets.contains(&p) {
+            bin_targets.push(p);
+        }
+    }
+
+    // 3. Remove proxy DLLs, loader configs, logs, and loader folders from all targets
+    for b in &bin_targets {
+        for f in [
+            "dwmapi.dll", "dwmapi.dll.disabled",
+            "dxgi.dll", "dxgi.dll.disabled",
+            "dinput8.dll", "dinput8.dll.disabled",
+            "version.dll", "version.dll.disabled",
+            "winhttp.dll", "winhttp.dll.disabled",
+            "winmm.dll", "winmm.dll.disabled",
+            "bink2w64.dll", "bink2w64.dll.disabled",
+            "xinput1_3.dll", "xinput1_3.dll.disabled",
+            "xinput1_4.dll", "xinput1_4.dll.disabled",
+            "UE4SS.dll", "UE4SS.log", "UE4SS-settings.ini",
+            "VTableLayout.ini", "MemberVariableLayout.ini",
+            "doorstop_config.ini", "doorstop_version",
+            "ScriptHookV.dll", "ScriptHookV.log",
+            "mods.txt",
+        ] {
+            let _ = fs::remove_file(b.join(f));
+        }
+        for d in [
+            "ue4ss", "Mods", "VTableLayoutTemplates", "MemberVarLayoutTemplates",
+            "BepInEx", "MelonLoader", "scripts", "Scripts", "plugins", "Plugins",
+            "UserData", "UserLibs",
+        ] {
+            let _ = fs::remove_dir_all(b.join(d));
+        }
+    }
+
+    // 4. Unreal & generic pak mods cleaning
     let paks = ModManager::find_or_create_paks_dir(&gdir);
     let _ = fs::remove_dir_all(paks.join("~mods"));
     let _ = fs::remove_dir_all(paks.join("LogicMods"));
+
+    // Also walk gdir for any nested ~mods or logicmods directories
+    for entry in WalkDir::new(&gdir).min_depth(1).max_depth(5).into_iter().flatten() {
+        if entry.file_type().is_dir() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name == "~mods" || name == "logicmods" {
+                let _ = fs::remove_dir_all(entry.path());
+            }
+        }
+    }
+
+    // 5. Game-specific mod ecosystems (e.g. Cyberpunk 2077)
+    let _ = fs::remove_dir_all(gdir.join("archive/pc/mod"));
+    let _ = fs::remove_dir_all(gdir.join("bin/x64/plugins/cyber_engine_tweaks"));
+    let _ = fs::remove_dir_all(gdir.join("r6/scripts"));
+    let _ = fs::remove_dir_all(gdir.join("red4ext"));
+
+    // 6. Purge and wipe the game's Mod Library (deploy::Library)
+    if let Some(lib) = library_of(g) {
+        let _ = lib.wipe_all();
+    }
 }
 
 fn ue4ss_installed(ue_bin: &Path) -> bool {
@@ -12817,6 +12902,26 @@ mod tests {
         assert!(st["mods"].as_array().unwrap().is_empty(), "{}", st["mods"]);
         let bin = PathBuf::from(&h.game.bin_dir);
         assert!(!bin.join("ue4ss").exists() && !bin.join("dwmapi.dll").exists());
+    }
+
+    #[test]
+    fn wipe_removes_proxy_dlls_and_library_mods_on_generic_games() {
+        let h = harness("wipe-generic");
+        let gdir = PathBuf::from(&h.game.game_dir);
+        let dll = gdir.join("winhttp.dll");
+        fs::write(&dll, b"proxy dll").unwrap();
+        let bep = gdir.join("BepInEx/plugins");
+        fs::create_dir_all(&bep).unwrap();
+        fs::write(bep.join("cool.dll"), b"plugin").unwrap();
+
+        refresh_mods_shared(&h.state);
+        let st_before = api(&h, "/api/state", json!({}));
+        assert!(st_before["mods"].as_array().unwrap().len() >= 1);
+
+        let st_after = api(&h, "/api/wipe_mods", json!({}));
+        assert!(st_after["mods"].as_array().unwrap().is_empty());
+        assert!(!dll.exists());
+        assert!(!gdir.join("BepInEx").exists());
     }
 
     #[test]

@@ -2347,6 +2347,22 @@ impl Library {
         Ok(rep)
     }
 
+    /// Remove every deployed mod from the game directory (restoring original backups) and wipe all staged mods.
+    pub fn wipe_all(&self) -> Result<(), String> {
+        let _g = lock();
+        let _ = self.purge_inner();
+        let _ = fs::remove_dir_all(self.root.join("mods"));
+        let _ = fs::remove_dir_all(self.root.join("backups"));
+        let _ = fs::remove_dir_all(self.root.join("trash"));
+        let _ = fs::remove_file(self.root.join("deployed.json"));
+        let mut lf = self.load();
+        lf.mods.clear();
+        lf.pins.clear();
+        lf.dirty = false;
+        let _ = self.save(&lf);
+        Ok(())
+    }
+
     /// Make the game folder match the library: purge, then lay every enabled mod over it.
     pub fn deploy(&self, force: bool) -> Result<DeployReport, String> {
         let _g = lock();
