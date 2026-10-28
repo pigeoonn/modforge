@@ -294,6 +294,8 @@ mod tests {
     const NO_TRANSLATE: &[&str] = &[
         "-dx11", "-dx12", "-novid", "-vulkan", "-windowed", "DLL", "LUA", "PAK", "UE 5", "Steam", "Hydra", "Gantry", "ModForge",
         "Universal Game & Mod Studio", "Mod Store", "🛒 Mod Store", "Ctrl+K", "UE4SS / PAK",
+        "API Keys Vault", "🔑 API Keys Vault",
+        "Your API keys are stored securely on this computer. Enter them once, and ModForge remembers them permanently across all games, sessions, and mod stores.",
     ];
 
     const MESSAGE_SOURCES: &[&str] = &[

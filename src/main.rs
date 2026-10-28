@@ -8019,6 +8019,33 @@ fn finish_run(state: &SharedState, run: Run) {
 
 // ───────────────────────────── Steam library ─────────────────────────────
 
+fn read_key_with_migration(target_file: &Path, file_name: &str) -> Option<String> {
+    if let Ok(k) = fs::read_to_string(target_file) {
+        let trimmed = k.trim().to_string();
+        if !trimmed.is_empty() {
+            return Some(trimmed);
+        }
+    }
+    let hp = home_dir();
+    let candidates = [
+        hp.join(".config/modforge").join(file_name),
+        hp.join(".config/gantry").join(file_name),
+        hp.join(".config/protonrig").join(file_name),
+    ];
+    for cand in &candidates {
+        if cand != target_file {
+            if let Ok(k) = fs::read_to_string(cand) {
+                let trimmed = k.trim().to_string();
+                if !trimmed.is_empty() {
+                    let _ = fsutil::atomic_write_private(target_file, &trimmed);
+                    return Some(trimmed);
+                }
+            }
+        }
+    }
+    None
+}
+
 fn steam_key_file(st: &AppState) -> PathBuf {
     st.paths.config_file.with_file_name("steam_web_api_key")
 }
@@ -8037,8 +8064,8 @@ struct OwnedCache {
 /// Load the saved key and the last owned-games list (no network access at startup).
 fn load_steam_lib(state: &SharedState) {
     let mut st = write_state(state);
-    if let Ok(k) = fs::read_to_string(steam_key_file(&st)) {
-        let k = k.trim().to_string();
+    let keyfile = steam_key_file(&st);
+    if let Some(k) = read_key_with_migration(&keyfile, "steam_web_api_key") {
         if steamlib::valid_key(&k) {
             st.steam_lib.key = Some(k);
         }
@@ -8169,8 +8196,8 @@ fn nexus_key_file(st: &AppState) -> PathBuf {
 /// Load a previously saved key (no network access at startup).
 fn load_nexus_key(state: &SharedState) {
     let mut st = write_state(state);
-    if let Ok(k) = fs::read_to_string(nexus_key_file(&st)) {
-        let k = k.trim().to_string();
+    let keyfile = nexus_key_file(&st);
+    if let Some(k) = read_key_with_migration(&keyfile, "nexus_api_key") {
         if nexus::valid_api_key(&k) {
             st.nexus.key = Some(k);
         }
@@ -8184,9 +8211,10 @@ fn modio_key_file(st: &AppState) -> PathBuf {
 /// Load a previously saved mod.io key (no network access at startup).
 fn load_modio_key(state: &SharedState) {
     let mut st = write_state(state);
-    if let Ok(k) = fs::read_to_string(modio_key_file(&st)) {
-        if modio::valid_key(k.trim()) {
-            st.modio.key = Some(k.trim().to_string());
+    let keyfile = modio_key_file(&st);
+    if let Some(k) = read_key_with_migration(&keyfile, "modio_api_key") {
+        if modio::valid_key(&k) {
+            st.modio.key = Some(k);
         }
     }
 }
@@ -8519,9 +8547,10 @@ fn vt_key_file(st: &AppState) -> PathBuf {
 
 fn load_vt_key(state: &SharedState) {
     let mut st = write_state(state);
-    if let Ok(k) = fs::read_to_string(vt_key_file(&st)) {
-        if virustotal::key_ok(k.trim()) {
-            st.vt.key = Some(k.trim().to_string());
+    let keyfile = vt_key_file(&st);
+    if let Some(k) = read_key_with_migration(&keyfile, "virustotal_api_key") {
+        if virustotal::key_ok(&k) {
+            st.vt.key = Some(k);
         }
     }
 }
