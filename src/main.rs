@@ -1055,6 +1055,7 @@ fn prune_updates(state: &SharedState) {
     prune_thunder_updates(state);
     prune_github_updates(state);
     prune_modio_updates(state);
+    prune_nexus_needs(state);
     let (rows, games) = {
         let st = read_state(state);
         if st.nexus.updates.is_empty() {
@@ -1077,6 +1078,34 @@ fn prune_updates(state: &SharedState) {
     if keep.len() != rows.len() {
         let mut st = write_state(state);
         st.nexus.updates = keep;
+        st.notifier.bump();
+    }
+}
+
+/// Forget requirements for mods that have been removed, disabled, or whose requirements are satisfied.
+fn prune_nexus_needs(state: &SharedState) {
+    let (rows, games) = {
+        let st = read_state(state);
+        if st.nexus.needs.is_empty() {
+            return;
+        }
+        (st.nexus.needs.clone(), st.games.clone())
+    };
+    let orig_len = rows.len();
+    let keep: Vec<NeedRow> = rows
+        .into_iter()
+        .filter(|r| {
+            games
+                .iter()
+                .find(|g| g.appid == r.appid && g.is_installed)
+                .and_then(library_of)
+                .map(|l| l.mods().iter().any(|m| m.id == r.lib_id && m.enabled))
+                .unwrap_or(false)
+        })
+        .collect();
+    if keep.len() != orig_len {
+        let mut st = write_state(state);
+        st.nexus.needs = keep;
         st.notifier.bump();
     }
 }
@@ -3095,7 +3124,11 @@ fn game_issues(state: &SharedState, g: &GameEntry, deep: bool) -> (Vec<Value>, V
     if drift > 0 {
         out.push(issue("drift", "warn", "redeploy", vec![drift.to_string()]));
     }
-    let needs: Vec<String> = read_state(state).nexus.needs.iter().filter(|n| n.appid == g.appid).flat_map(|n| n.missing.iter().map(|m| m.name.clone())).collect();
+    let enabled_lib_ids: std::collections::HashSet<String> = mods.iter().filter(|m| m.enabled).map(|m| m.id.clone()).collect();
+    let needs: Vec<String> = read_state(state).nexus.needs.iter()
+        .filter(|n| n.appid == g.appid && enabled_lib_ids.contains(&n.lib_id))
+        .flat_map(|n| n.missing.iter().map(|m| m.name.clone()))
+        .collect();
     if !needs.is_empty() {
         out.push(issue("needs", "warn", "", vec![needs.join(", ")]));
     }
@@ -3255,7 +3288,11 @@ fn preflight(state: &SharedState, g: &GameEntry) -> Vec<Value> {
     if let Some(free) = fsutil::free_bytes(&dir).filter(|f| *f < LOW_DISK) {
         out.push(issue("low_disk", "warn", "", vec![fsutil::size_text(free)]));
     }
-    let needs: Vec<String> = read_state(state).nexus.needs.iter().filter(|n| n.appid == g.appid).flat_map(|n| n.missing.iter().map(|m| m.name.clone())).collect();
+    let enabled_lib_ids: std::collections::HashSet<String> = mods.iter().filter(|m| m.enabled).map(|m| m.id.clone()).collect();
+    let needs: Vec<String> = read_state(state).nexus.needs.iter()
+        .filter(|n| n.appid == g.appid && enabled_lib_ids.contains(&n.lib_id))
+        .flat_map(|n| n.missing.iter().map(|m| m.name.clone()))
+        .collect();
     if !needs.is_empty() {
         out.push(issue("needs", "info", "", vec![needs.join(", ")]));
     }
@@ -6899,6 +6936,12 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 {
                     let mut st = write_state(state);
                     st.mods.clear();
+                    st.nexus.needs.retain(|n| n.appid != g.appid);
+                    st.nexus.updates.retain(|u| u.appid != g.appid);
+                    st.thunder.updates.retain(|u| u.appid != g.appid);
+                    st.github_updates.retain(|u| u.appid != g.appid);
+                    st.modio_updates.retain(|u| u.appid != g.appid);
+                    st.health.remove(&g.appid);
                     let idx = st.selected_idx;
                     if let Some(gm) = st.games.get_mut(idx) {
                         gm.mod_count = 0;
@@ -7214,8 +7257,11 @@ fn wipe_mods(g: &GameEntry) {
 
     // 5. Game-specific mod ecosystems (e.g. Cyberpunk 2077)
     let _ = fs::remove_dir_all(gdir.join("archive/pc/mod"));
-    let _ = fs::remove_dir_all(gdir.join("bin/x64/plugins/cyber_engine_tweaks"));
+    let _ = fs::remove_dir_all(gdir.join("bin/x64/plugins"));
     let _ = fs::remove_dir_all(gdir.join("r6/scripts"));
+    let _ = fs::remove_dir_all(gdir.join("r6/logs"));
+    let _ = fs::remove_dir_all(gdir.join("r6/cache"));
+    let _ = fs::remove_dir_all(gdir.join("r6/config"));
     let _ = fs::remove_dir_all(gdir.join("red4ext"));
 
     // 6. Purge and wipe the game's Mod Library (deploy::Library)
@@ -12922,6 +12968,45 @@ mod tests {
         assert!(st_after["mods"].as_array().unwrap().is_empty());
         assert!(!dll.exists());
         assert!(!gdir.join("BepInEx").exists());
+    }
+
+    #[test]
+    fn wipe_and_prune_clears_phantom_needs_and_drift_warnings() {
+        let h = harness("wipe-phantom");
+        let g = selected_game(&h.state).unwrap();
+        // inject a need for a nonexistent mod
+        {
+            let mut st = h.state.write().unwrap();
+            st.nexus.needs.push(NeedRow {
+                appid: g.appid.clone(),
+                lib_id: "ghost_mod_123".into(),
+                name: "Ghost Mod".into(),
+                missing: vec![MissingReq { name: "RequiredFramework".into(), page_url: String::new(), notes: String::new() }],
+            });
+        }
+        // Doctor should NOT report needs for ghost mod
+        let issues = game_issues(&h.state, &g, false).0;
+        assert!(!issues.iter().any(|i| i["code"] == "needs"), "doctor ignores needs for mods not in library");
+
+        // Now prune_updates directly
+        prune_updates(&h.state);
+        let st = api(&h, "/api/state", json!({}));
+        let needs = st["nexus"]["needs"].as_array().unwrap();
+        assert!(needs.is_empty(), "prune_updates removed ghost needs");
+
+        // Inject needs and wipe
+        {
+            let mut st = h.state.write().unwrap();
+            st.nexus.needs.push(NeedRow {
+                appid: g.appid.clone(),
+                lib_id: "another_ghost".into(),
+                name: "Another Ghost".into(),
+                missing: vec![MissingReq { name: "Another".into(), page_url: String::new(), notes: String::new() }],
+            });
+        }
+        api(&h, "/api/wipe_mods", json!({}));
+        let st_after = api(&h, "/api/state", json!({}));
+        assert!(st_after["nexus"]["needs"].as_array().unwrap().is_empty(), "wipe_mods clears needs for the wiped game");
     }
 
     #[test]

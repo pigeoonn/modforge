@@ -2324,9 +2324,14 @@ impl Library {
     /// Deployed files that are no longer what Gantry put there: the game, a launcher or the user
     /// replaced or deleted them (a game update does this). `(path, "missing" | "changed")`.
     pub fn drift(&self) -> Vec<(String, &'static str)> {
+        let known_ids: HashSet<String> = self.load().mods.into_iter().filter(|m| m.enabled).map(|m| m.id).collect();
+        if known_ids.is_empty() {
+            return Vec::new();
+        }
         self.journal()
             .entries
             .iter()
+            .filter(|e| known_ids.contains(&e.mod_id))
             .filter_map(|e| match fs::symlink_metadata(self.game_dir.join(&e.rel)) {
                 Err(_) => Some((e.rel.clone(), "missing")),
                 Ok(_) if self.is_ours(e) => None,
@@ -2354,12 +2359,16 @@ impl Library {
         let _ = fs::remove_dir_all(self.root.join("mods"));
         let _ = fs::remove_dir_all(self.root.join("backups"));
         let _ = fs::remove_dir_all(self.root.join("trash"));
-        let _ = fs::remove_file(self.root.join("deployed.json"));
+        let _ = self.save_journal(&Journal::default());
+        let _ = fs::remove_file(fsutil::kept_copy(&self.journal_path()));
         let mut lf = self.load();
         lf.mods.clear();
         lf.pins.clear();
+        lf.undo = None;
+        lf.history.clear();
         lf.dirty = false;
         let _ = self.save(&lf);
+        let _ = fs::remove_file(fsutil::kept_copy(&self.lib_path()));
         Ok(())
     }
 
@@ -2509,7 +2518,12 @@ impl Library {
     /// Everything the UI needs to show.
     pub fn status_json(&self) -> Value {
         let lf = self.load();
-        let j = self.journal();
+        let mut j = self.journal();
+        if lf.mods.is_empty() && !j.entries.is_empty() {
+            let _ = self.save_journal(&Journal::default());
+            let _ = fs::remove_file(fsutil::kept_copy(&self.journal_path()));
+            j = Journal::default();
+        }
         let plan = self.build_plan(&lf.mods, &lf.pins);
         let drift = {
             let d = self.drift();
@@ -2533,6 +2547,8 @@ impl Library {
             v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
             v.into_iter().take(2).map(|(k, n)| json!({ "mod": k, "files": n })).collect()
         };
+        let known_ids: HashSet<String> = lf.mods.iter().map(|m| m.id.clone()).collect();
+        let deployed_count = j.entries.iter().filter(|e| known_ids.contains(&e.mod_id)).count();
         let ours: HashSet<String> = j.entries.iter().map(|e| e.rel.to_lowercase()).collect();
         let overwrites = plan
             .files
@@ -2542,7 +2558,7 @@ impl Library {
         json!({
             "root": self.root.to_string_lossy(),
             "dirty": lf.dirty,
-            "deployed": j.entries.len(),
+            "deployed": deployed_count,
             "overwrites": overwrites,
             "overrides": self.overrides_from(&j),
             "anti_cheat": if lf.mods.is_empty() { None } else { anti_cheat(&self.game_dir) },

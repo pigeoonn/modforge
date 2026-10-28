@@ -6830,7 +6830,7 @@
       const first = nexusUps[0] || thunderUps[0];
       items.push({ icon: '⬆', text: tp(nUp, '{} mod update is available', '{} mod updates are available'), go: () => openForGame(first.appid, openModLib) });
     }
-    const setup = appState.games.filter(g => g.is_installed !== false && isUnreal(g) && !g.ue4ss);
+    const setup = appState.games.filter(g => g.is_installed !== false && isUnreal(g) && !g.ue4ss && g.mod_count > 0);
     if (setup.length) {
       items.push({ icon: '⚙', text: t('Unreal games waiting for UE4SS setup: {}', setup.slice(0, 3).map(g => g.name).join(', ') + (setup.length > 3 ? '…' : '')), go: () => setLibFilter('ue') });
     }
@@ -6841,7 +6841,7 @@
     }
     const lib = appState.library;
     const sel = appState.games[appState.selected_idx];
-    if (lib && lib.dirty && sel) items.push({ icon: '📦', text: t('Changes in the Mod Library of {} are not deployed yet', sel.name), go: openModLib });
+    if (lib && lib.dirty && sel && ((lib.mods || []).length > 0)) items.push({ icon: '📦', text: t('Changes in the Mod Library of {} are not deployed yet', sel.name), go: openModLib });
     return items;
   }
   let attnActions = [];
