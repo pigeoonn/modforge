@@ -33,6 +33,13 @@ from PyQt6.QtGui import (
     QBrush, QPen, QDesktopServices
 )
 
+try:
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+    from PyQt6.QtWebEngineCore import QWebEnginePage
+    HAS_WEBENGINE = True
+except ImportError:
+    HAS_WEBENGINE = False
+
 # Configuration & Paths
 DEFAULT_PORT = 19450
 BASE_DIR = Path(__file__).resolve().parent
@@ -1703,13 +1710,76 @@ class ModForgeApp(QMainWindow):
             self.refresh_state()
 
 
+class ExternalLinkPage(QWebEnginePage):
+    def acceptNavigationRequest(self, url, nav_type, is_main_frame):
+        url_str = url.toString()
+        if "127.0.0.1:19450" in url_str or "localhost:19450" in url_str:
+            return True
+        if url.scheme() in ("http", "https"):
+            QDesktopServices.openUrl(url)
+            return False
+        return True
+
+
+class ModForgeStudioWindow(QMainWindow):
+    def __init__(self, port=DEFAULT_PORT):
+        super().__init__()
+        self.port = port
+        self.setWindowTitle("ModForge — Universal Game & Mod Studio")
+        if ICON_PATH.exists():
+            self.setWindowIcon(QIcon(str(ICON_PATH)))
+        self.resize(1380, 880)
+
+        # Center on primary display
+        screen = QApplication.primaryScreen()
+        if screen:
+            geo = screen.availableGeometry()
+            self.move((geo.width() - 1380) // 2, (geo.height() - 880) // 2)
+
+        self.ensure_daemon()
+
+        self.web = QWebEngineView(self)
+        self.page = ExternalLinkPage(self.web)
+        self.web.setPage(self.page)
+        self.setCentralWidget(self.web)
+        self.web.load(QUrl(f"http://127.0.0.1:{self.port}/"))
+
+    def ensure_daemon(self):
+        try:
+            req = urllib.request.urlopen(f"http://127.0.0.1:{self.port}/", timeout=0.8)
+            if req.status == 200:
+                return
+        except Exception:
+            pass
+
+        # Spawn headless backend daemon
+        bin_path = RELEASE_BIN if RELEASE_BIN.exists() else Path("./modforge")
+        env = os.environ.copy()
+        env["RIG_NO_WINDOW"] = "1"
+        try:
+            subprocess.Popen([str(bin_path)], cwd=str(BASE_DIR), env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(30):
+                time.sleep(0.1)
+                try:
+                    if urllib.request.urlopen(f"http://127.0.0.1:{self.port}/", timeout=0.5).status == 200:
+                        break
+                except Exception:
+                    pass
+        except Exception as e:
+            print("Failed to auto-spawn backend daemon:", e)
+
+
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    window = ModForgeApp()
+    if HAS_WEBENGINE and not os.environ.get("MODFORGE_QT_FALLBACK"):
+        window = ModForgeStudioWindow()
+    else:
+        window = ModForgeApp()
     window.show()
     sys.exit(app.exec())
 
 
 if __name__ == "__main__":
     main()
+

@@ -291,7 +291,10 @@ mod tests {
     ];
 
     /// Words and tokens of the page that stay as they are in every language.
-    const NO_TRANSLATE: &[&str] = &["-dx11", "-dx12", "-novid", "-vulkan", "-windowed", "DLL", "LUA", "PAK", "UE 5", "Steam", "Hydra", "Gantry", "Ctrl+K", "UE4SS / PAK"];
+    const NO_TRANSLATE: &[&str] = &[
+        "-dx11", "-dx12", "-novid", "-vulkan", "-windowed", "DLL", "LUA", "PAK", "UE 5", "Steam", "Hydra", "Gantry", "ModForge",
+        "Universal Game & Mod Studio", "Mod Store", "🛒 Mod Store", "Ctrl+K", "UE4SS / PAK",
+    ];
 
     const MESSAGE_SOURCES: &[&str] = &[
         "main.rs", "repair.rs", "saves.rs", "steam.rs", "crash.rs", "bisect.rs", "ue4ss.rs", "nexus.rs", "deploy.rs", "engine.rs", "hydra.rs", "install.rs",

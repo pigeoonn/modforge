@@ -4689,6 +4689,15 @@ fn launch_native_app_window(url: &str, profile_dir: &Path) {
     if std::env::var_os("RIG_NO_WINDOW").is_some() {
         return;
     }
+    // Launch native Qt desktop shell if available
+    let py_app = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("modforge_app.py")));
+    if let Some(app_path) = py_app.filter(|p| p.exists()) {
+        let mut py = Command::new("python3");
+        py.arg(app_path).stdout(Stdio::null()).stderr(Stdio::null());
+        if spawn_reaped(py) {
+            return;
+        }
+    }
     for browser in platform::browsers() {
         let mut c = Command::new(browser);
         c.arg(format!("--app={}", url))
@@ -4707,7 +4716,7 @@ fn launch_native_app_window(url: &str, profile_dir: &Path) {
             .stderr(Stdio::null());
         if !platform::IS_WINDOWS && !platform::IS_MAC {
             // its own window class (taskbar grouping, icon) and Wayland
-            c.arg("--class=Gantry").arg("--name=Gantry").arg("--ozone-platform-hint=auto").arg("--enable-zero-copy");
+            c.arg("--class=ModForge").arg("--name=ModForge").arg("--ozone-platform-hint=auto").arg("--enable-zero-copy");
         }
         if spawn_reaped(c) {
             return;
