@@ -288,6 +288,13 @@ mod tests {
         "Loader: {}   running: {}",
         "Library: {} file(s) deployed, drift {}, dirty {}",
         "{} (current: '{}', wanted: '{}')",
+        "Could not find that mod to save config.",
+        "Invalid UE4SS settings: {}",
+        "Invalid mod.io game ID.",
+        "Invalid mod.io mod ID.",
+        "Profile name cannot be empty.",
+        "Saved Nexus domain '{}'.",
+        "Saved Thunderstore community.",
     ];
 
     /// Words and tokens of the page that stay as they are in every language.

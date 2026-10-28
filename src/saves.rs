@@ -356,12 +356,13 @@ pub fn compare(game: &GameEntry, cache_root: &Path, from: &str, to: &str, custom
 /// Put one file of a backup back where it belongs; every other save stays as it is. What is there now is
 /// backed up first, like a full restore.
 pub fn restore_file(game: &GameEntry, cache_root: &Path, id: &str, key: &str, path: &str, custom: &[String]) -> Result<String, String> {
-    let rel = Path::new(path);
-    if path.is_empty() || !rel.components().all(|c| matches!(c, std::path::Component::Normal(_))) {
+    let clean = path.trim_start_matches('/').trim_start_matches('\\').replace('\\', "/");
+    let rel = Path::new(&clean);
+    if clean.is_empty() || clean.contains("..") || !rel.components().all(|c| matches!(c, std::path::Component::Normal(_))) {
         return Err("That is not a file of this backup.".into());
     }
     let (snap, files) = snapshot_with_paths(game, cache_root, id)?;
-    let (_, src) = files.into_iter().find(|(f, _)| f.key == key && f.path == path).ok_or("That is not a file of this backup.")?;
+    let (_, src) = files.into_iter().find(|(f, _)| f.key == key && (f.path == path || f.path == clean || f.path.replace('\\', "/") == clean)).ok_or("That is not a file of this backup.")?;
     let root = snap.roots.iter().find(|r| r.key == key).ok_or("That is not a file of this backup.")?;
     let dest = profsaves::resolve(&root.token, &profsaves::bases(game)).ok_or("The place this save belongs to was not found.")?.join(rel);
     match snapshot_keeping(game, cache_root, "before-restore", custom, Some(id)) {

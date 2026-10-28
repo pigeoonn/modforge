@@ -263,6 +263,9 @@ pub struct RigConfigData {
     /// Thunderstore community chosen by hand per game (appid → identifier), when names do not match.
     #[serde(default)]
     pub thunder_community: HashMap<String, String>,
+    /// mod.io game chosen per game (appid → mod.io game id).
+    #[serde(default)]
+    pub modio_game: HashMap<String, u64>,
 }
 
 // ───────────────────────────── INI helpers ─────────────────────────────

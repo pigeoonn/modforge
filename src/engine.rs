@@ -860,6 +860,9 @@ impl RigEngine {
         for g in &mut games {
             if let Some(c) = cfg.cover_appid.get(&g.appid).filter(|c| c.as_str() != "0") {
                 g.cover_id = c.clone();
+                if g.steam_appid.is_empty() {
+                    g.steam_appid = c.clone();
+                }
             }
         }
         games.sort_by_cached_key(|g| g.name.to_lowercase());

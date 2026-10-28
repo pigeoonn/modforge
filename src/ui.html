@@ -5492,7 +5492,7 @@
     document.getElementById('tsList').classList.add('store-grid');
     document.getElementById('tsList').innerHTML = storeSkeleton(8);
     document.getElementById('tsList').scrollTop = 0;
-    storeNext = { n: 0, t: 0 };
+    storeNext = { n: 0, t: 0, m: 0 };
     storeMore = false;
     await storeLoad(true);
   }
@@ -5503,7 +5503,7 @@
     const list = document.getElementById('tsList');
     const q = document.getElementById('tsSearch').value.trim();
     let d = {};
-    try { d = await (await fetch(`/api/store?source=${storeSource}&sort=${storeSort}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(storeCat)}&libs=${storeLibs ? 1 : 0}&off_n=${storeNext.n}&off_t=${storeNext.t}`)).json(); } catch (e) { d = { error: 'Could not reach the mod sites.' }; }
+    try { d = await (await fetch(`/api/store?source=${storeSource}&sort=${storeSort}&q=${encodeURIComponent(q)}&category=${encodeURIComponent(storeCat)}&libs=${storeLibs ? 1 : 0}&off_n=${storeNext.n || 0}&off_t=${storeNext.t || 0}&off_m=${storeNext.m || 0}`)).json(); } catch (e) { d = { error: 'Could not reach the mod sites.' }; }
     if (my !== storeSeq) return;
     storeBusy = false;
     list.querySelectorAll('.sk, .s-more').forEach(e => e.remove());
@@ -7044,7 +7044,7 @@
       : `<span class="ml-pill bad">⚠️ Not Configured</span> <span style="color:var(--text-muted); font-size:12px;">Required for automatic Nexus mod downloads and updates</span>`;
 
     const modioStatus = m.configured
-      ? `<span class="ml-pill good" style="font-weight:700;">✅ Active &amp; Saved</span> <span style="color:var(--text-muted); font-size:12px;">mod.io unlocked permanently across all games &amp; mod stores</span>`
+      ? `<span class="ml-pill good" style="font-weight:700;">✅ Active &amp; Saved</span> <span style="color:var(--text-muted); font-size:12px;">mod.io unlocked · Key: <code>${escapeHtml(m.key_hint || '••••••••')}</code></span>`
       : `<span class="ml-pill bad">⚠️ Not Configured</span> <span style="color:var(--text-muted); font-size:12px;">Required to browse and install community mods from mod.io</span>`;
 
     const steamStatus = sl.configured
@@ -7052,7 +7052,7 @@
       : `<span class="ml-pill" style="opacity:0.8;">⚪ Not Configured</span> <span style="color:var(--text-muted); font-size:12px;">Optional: auto-detect games owned on Steam</span>`;
 
     const vtStatus = st.vt_key
-      ? `<span class="ml-pill good" style="font-weight:700;">✅ Active &amp; Saved</span> <span style="color:var(--text-muted); font-size:12px;">Automated SHA-256 cloud binary security inspection enabled</span>`
+      ? `<span class="ml-pill good" style="font-weight:700;">✅ Active &amp; Saved</span> <span style="color:var(--text-muted); font-size:12px;">Automated SHA-256 cloud binary security inspection enabled · Key: <code>${escapeHtml(st.vt_key_hint || '••••••••')}</code></span>`
       : `<span class="ml-pill" style="opacity:0.8;">⚪ Not Configured</span> <span style="color:var(--text-muted); font-size:12px;">Optional: file safety analysis</span>`;
 
     body.innerHTML = `

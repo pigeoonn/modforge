@@ -1,4 +1,5 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![recursion_limit = "256"]
 pub mod bisect;
 pub mod compat;
 pub mod covers;
@@ -873,10 +874,10 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
-            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "can_self_update": self.self_target.is_some(), "crash_reports": self.crash_reports, "update_ready": self.update_ready, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some() },
+            "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "can_self_update": self.self_target.is_some(), "crash_reports": self.crash_reports, "update_ready": self.update_ready, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some(), "vt_key_hint": self.vt.key.as_ref().map(|k| format!("…{}", &k[k.len().saturating_sub(4)..])) },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
-            "health": self.health,
+            "health": self.health.iter().filter(|(appid, _)| self.games.iter().any(|g| &g.appid == *appid && g.is_installed)).map(|(k, v)| (k.clone(), v.clone())).collect::<std::collections::BTreeMap<_, _>>(),
             "pending_fomod": self.pending_fomod.first().map(|p| json!({ "name": if p.module.name.is_empty() { p.fname.clone() } else { p.module.name.clone() }, "image": p.module.image, "queue": self.pending_fomod.len() })),
             "pending_install": self.pending_install.as_ref().map(|p| json!({ "name": p.name, "placed_by": p.preview.placed_by, "target": p.preview.target, "files": p.preview.files, "folders": p.preview.folders.iter().take(6).collect::<Vec<_>>(), "notes": p.preview.notes, "more": self.pending_queue.len() })),
             "unity": self.games.get(self.selected_idx).filter(|g| g.is_installed).and_then(|g| loaders::detect(Path::new(&g.game_dir)).map(|u| json!({ "il2cpp": u.il2cpp, "x64": u.x64, "loader": u.loader, "recommended": recipes::find(&self.recipes, &g.appid, &g.steam_appid).map(|r| r.loader.clone()).unwrap_or_default() }))),
@@ -898,8 +899,8 @@ impl AppState {
             "nexus": self.nexus_json(),
             "steam_lib": self.steam_lib_json(),
             "last_played": self.last_played_json(),
-            "modio": json!({ "configured": self.modio.key.is_some() }),
-            "thunder_updates": self.thunder.updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null)).chain(self.github_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).chain(self.modio_updates.iter().map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).collect::<Vec<_>>(),
+            "modio": json!({ "configured": self.modio.key.is_some(), "key_hint": self.modio.key.as_ref().map(|k| format!("…{}", &k[k.len().saturating_sub(4)..])) }),
+            "thunder_updates": self.thunder.updates.iter().filter(|u| self.games.iter().any(|g| g.appid == u.appid && g.is_installed)).map(|u| serde_json::to_value(u).unwrap_or(Value::Null)).chain(self.github_updates.iter().filter(|u| self.games.iter().any(|g| g.appid == u.appid && g.is_installed)).map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).chain(self.modio_updates.iter().filter(|u| self.games.iter().any(|g| g.appid == u.appid && g.is_installed)).map(|u| serde_json::to_value(u).unwrap_or(Value::Null))).collect::<Vec<_>>(),
         });
         v["trainer_shelf"] = self.trainer_shelf_json();
         v["trainer_run"] = self.trainer_run_json();
@@ -970,8 +971,8 @@ impl AppState {
                 "target": self.nexus.pending_for.as_ref().map(|t| t.name.clone()).unwrap_or(target.clone()),
                 "update": self.nexus.pending_for.is_some(),
             })),
-            "updates": self.nexus.updates,
-            "needs": self.nexus.needs,
+            "updates": self.nexus.updates.iter().filter(|u| self.games.iter().any(|g| g.appid == u.appid && g.is_installed)).cloned().collect::<Vec<_>>(),
+            "needs": self.nexus.needs.iter().filter(|n| self.games.iter().any(|g| g.appid == n.appid && g.is_installed)).cloned().collect::<Vec<_>>(),
             "checked_ms": self.nexus.checked_ms,
             "checking": self.nexus.checking,
             "check_error": self.nexus.check_error,
@@ -1045,7 +1046,11 @@ fn refresh_mods_shared(state: &SharedState) {
         lib["pending_pack"] = pending_pack_json(state, &game);
     }
     let mut st = write_state(state);
-    if st.apply_mods(&game.appid, list) {
+    if !game.is_installed {
+        st.health.remove(&game.appid);
+    }
+    let applied = st.apply_mods(&game.appid, list);
+    if applied || st.games.get(st.selected_idx).map(|g| &g.appid) == Some(&game.appid) {
         st.library = lib;
     }
 }
@@ -1321,7 +1326,7 @@ fn trending_for_home(state: &SharedState, refresh: bool) -> Value {
     };
     let mut shelves: Vec<Value> = Vec::new();
     for g in games {
-        let ask = StoreAsk { source: "both".into(), sort: "lately".into(), query: String::new(), category: String::new(), off_nexus: 0, off_thunder: 0, per: 8, hide_libs: true };
+        let ask = StoreAsk { source: "both".into(), sort: "lately".into(), query: String::new(), category: String::new(), off_nexus: 0, off_thunder: 0, off_modio: 0, per: 8, hide_libs: true };
         let page = store_page(state, &g, &ask);
         let cards: Vec<Value> = page["cards"].as_array().cloned().unwrap_or_default().into_iter().filter(|c| c["installed"] != true).take(4).collect();
         if !cards.is_empty() {
@@ -1936,7 +1941,7 @@ fn install_worker(state: &SharedState) {
         install_routed(job.path, job.temp, Arc::clone(state), job.opts);
         let mut st = write_state(state);
         // what happened to it: an error said while it was installing, a new question, or it went in
-        let new = (st.log_seq - seq).min(st.logs.len() as u64) as usize;
+        let new = st.log_seq.saturating_sub(seq).min(st.logs.len() as u64) as usize;
         let err = st.logs.iter().rev().take(new).find(|l| l.level == "ERR").map(|l| l.message.clone());
         let now_asked = questions_waiting(&st);
         if let Some(b) = st.batch.as_mut() {
@@ -2089,6 +2094,7 @@ struct StoreAsk {
     category: String,
     off_nexus: usize,
     off_thunder: usize,
+    off_modio: usize,
     per: usize,
     /// Leave out the libraries and tools of Thunderstore (BepInEx, mod managers...): they are needed, not browsed.
     hide_libs: bool,
@@ -2227,8 +2233,8 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
     let mut cards: Vec<Value> = Vec::new();
     let mut notes: Vec<Value> = Vec::new();
     let mut categories: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    let (mut next_n, mut next_t) = (ask.off_nexus, ask.off_thunder);
-    let (mut more_n, mut more_t) = (false, false);
+    let (mut next_n, mut next_t, mut next_m) = (ask.off_nexus, ask.off_thunder, ask.off_modio);
+    let (mut more_n, mut more_t, mut more_m) = (false, false, false);
     let want_nexus = !matches!(ask.source.as_str(), "thunder" | "modio");
     let want_thunder = !matches!(ask.source.as_str(), "nexus" | "modio");
     let want_modio = matches!(ask.source.as_str(), "modio" | "both" | "all");
@@ -2318,11 +2324,11 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
                 let choose = if has_key && e.contains("has no game called") { modio_candidates(state, g) } else { Vec::new() };
                 notes.push(json!({ "source": "modio", "error": e, "need_key": !has_key, "choose": choose }));
             }
-            Ok((game_id, client)) => match client.mods(game_id, &modio::Query { text: ask.query.clone(), sort: ask.sort.clone(), offset: ask.off_nexus, limit: ask.per }) {
+            Ok((game_id, client)) => match client.mods(game_id, &modio::Query { text: ask.query.clone(), sort: ask.sort.clone(), offset: ask.off_modio, limit: ask.per }) {
                 Err(e) => notes.push(json!({ "source": "modio", "error": e })),
                 Ok((list, total)) => {
-                    next_n = ask.off_nexus + list.len();
-                    more_n = list.len() >= ask.per && (next_n as u64) < total;
+                    next_m = ask.off_modio + list.len();
+                    more_m = list.len() >= ask.per && (next_m as u64) < total;
                     for c in list.into_iter().filter(|c| adult || !c.adult) {
                         cards.push(json!({
                             "source": "modio", "id": c.id.to_string(), "name": c.name, "summary": c.summary, "author": c.author, "version": c.version,
@@ -2344,7 +2350,7 @@ fn store_page(state: &SharedState, g: &GameEntry, ask: &StoreAsk) -> Value {
     if (ask.source == "both" || ask.source == "all") && !cards.is_empty() {
         notes.retain(|n| !(n["source"] == "nexus" && n["need_domain"].as_bool().unwrap_or(false)));
     }
-    json!({ "cards": cards, "next": { "n": next_n, "t": next_t }, "more": more_n || more_t, "categories": categories, "notes": notes, "premium": premium, "adult": adult })
+    json!({ "cards": cards, "next": { "n": next_n, "t": next_t, "m": next_m }, "more": more_n || more_t || more_m, "categories": categories, "notes": notes, "premium": premium, "adult": adult })
 }
 
 // ───────────────────────────── backup, disk use, cleanup ─────────────────────────────
@@ -3154,7 +3160,7 @@ fn duplicate_issues(mods: &[deploy::LibMod]) -> Vec<Value> {
     for m in mods.iter().filter(|m| m.enabled) {
         // one Nexus page can offer several files at once (a head and a body, say): only the same name twice is a duplicate
         let norm = |s: &str| s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
-        let key = m.nexus.as_ref().filter(|n| n.valid()).map(|n| format!("nx:{}:{}:{}", n.game, n.mod_id, norm(&m.name))).or_else(|| m.thunderstore.as_ref().map(|t| format!("ts:{}", t.full_name().to_lowercase()))).or_else(|| m.modio.as_ref().map(|r| format!("mio:{}:{}", r.game_id, r.mod_id)));
+        let key = m.nexus.as_ref().filter(|n| n.valid()).map(|n| format!("nx:{}:{}:{}", n.game, n.mod_id, norm(&m.name))).or_else(|| m.thunderstore.as_ref().map(|t| format!("ts:{}", t.full_name().to_lowercase()))).or_else(|| m.modio.as_ref().filter(|r| r.valid()).map(|r| format!("mio:{}:{}", r.game_id, r.mod_id)));
         if let Some(k) = key {
             groups.entry(k).or_default().push(if m.version.is_empty() { m.name.clone() } else { format!("{} v{}", m.name, m.version) });
         }
@@ -3563,14 +3569,19 @@ fn nexus_domain_for(state: &SharedState, g: &GameEntry) -> Result<String, String
     let fresh = fs::metadata(&file).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|a| a < Duration::from_secs(86_400)).unwrap_or(false);
     let list: Vec<(String, String)> = match fresh.then(|| fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok())).flatten() {
         Some(l) => l,
-        None => {
-            let l = client.games()?;
-            if let Some(dir) = file.parent() {
-                let _ = fs::create_dir_all(dir);
+        None => match client.games() {
+            Ok(l) => {
+                if let Some(dir) = file.parent() {
+                    let _ = fs::create_dir_all(dir);
+                }
+                let _ = fsutil::atomic_write(&file, serde_json::to_string(&l).unwrap_or_default());
+                l
             }
-            let _ = fsutil::atomic_write(&file, serde_json::to_string(&l).unwrap_or_default());
-            l
-        }
+            Err(e) => match fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()) {
+                Some(old) => old,
+                None => return Err(e),
+            },
+        },
     };
     nexus::match_domain(&g.name, &list).ok_or_else(|| format!("Gantry could not tell which Nexus Mods game {} is.", g.name))
 }
@@ -3613,10 +3624,23 @@ fn nexus_get_mod(state: &SharedState, mod_id: u64, name: &str) {
 
 /// Premium: fetch and install every mod a library mod needs that is still missing.
 fn nexus_install_needs(state: &SharedState, appid: &str, lib_id: &str) {
-    let row = read_state(state).nexus.needs.iter().find(|n| n.appid == appid && n.lib_id == lib_id).cloned();
+    let (row, premium) = {
+        let st = read_state(state);
+        (
+            st.nexus.needs.iter().find(|n| n.appid == appid && n.lib_id == lib_id).cloned(),
+            st.nexus.user.as_ref().map(|u| u.premium).unwrap_or(false),
+        )
+    };
     let (Some(row), Some(g)) = (row, game_by_appid(state, appid)) else { return };
-    let premium = read_state(state).nexus.user.as_ref().map(|u| u.premium).unwrap_or(false);
-    let parse = |url: &str| url.strip_prefix("https://www.nexusmods.com/").and_then(|p| p.split_once("/mods/")).and_then(|(g, i)| Some((g.to_string(), i.split(['?', '/']).next()?.parse::<u64>().ok()?)));
+    let parse = |url: &str| {
+        let stripped = url
+            .strip_prefix("https://www.nexusmods.com/")
+            .or_else(|| url.strip_prefix("https://nexusmods.com/"))
+            .or_else(|| url.strip_prefix("http://www.nexusmods.com/"))
+            .or_else(|| url.strip_prefix("http://nexusmods.com/"))?;
+        let (g, i) = stripped.split_once("/mods/")?;
+        Some((g.to_string(), i.split(['?', '/']).next()?.parse::<u64>().ok()?))
+    };
     if !premium {
         // a free account cannot download without the website: the pages open one after the other and each download is installed on arrival
         let mut queued = 0;
@@ -3825,7 +3849,9 @@ fn github_install_named(state: &SharedState, g: &GameEntry, repo: &str, url: &st
     if !github::download_ok(url, &o, &r, allow.as_deref()) {
         return log(state, "ERR", "Refusing a download that is not from that repository's releases.");
     }
-    let name = url.rsplit('/').next().unwrap_or("download.zip");
+    let raw_name = url.split('?').next().unwrap_or(url).rsplit('/').next().unwrap_or("download.zip");
+    let name_decoded = fsutil::url_decode(raw_name);
+    let name = name_decoded.as_str();
     if name.is_empty() || name.contains("..") || name.contains('\\') {
         return log(state, "ERR", "That file name is not allowed.");
     }
@@ -5074,6 +5100,7 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
                 category: query_param(&query, "category").unwrap_or_default(),
                 off_nexus: n("off_n"),
                 off_thunder: n("off_t"),
+                off_modio: n("off_m"),
                 hide_libs: query_param(&query, "libs").as_deref() != Some("1"),
                 per: match n("per") {
                     0 => 18,
@@ -5455,9 +5482,19 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             if sid.is_empty() || sid.bytes().all(|b| b.is_ascii_digit()) {
                 let mut st = write_state(state);
                 let idx = st.selected_idx;
-                if let Some(g) = st.games.get_mut(idx) {
-                    g.steam_appid = sid.clone();
+                let appid_opt = st.games.get(idx).map(|g| g.appid.clone());
+                if let Some(appid) = appid_opt {
+                    if let Some(g) = st.games.get_mut(idx) {
+                        g.steam_appid = sid.clone();
+                    }
+                    if sid.is_empty() {
+                        st.config.cover_appid.remove(&appid);
+                    } else {
+                        st.config.cover_appid.insert(appid, sid.clone());
+                    }
+                    st.save_config();
                     st.save_custom_games();
+                    st.notifier.bump();
                     st.log("OK", format!("Updated Cover Steam AppID to '{}'.", sid));
                 }
             } else {
@@ -5517,13 +5554,16 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/profile_save" => {
             let pname = body_str(body, "name");
-            if !pname.is_empty() {
+            if pname.is_empty() {
+                log(state, "WARN", "Profile name cannot be empty.");
+            } else {
                 let mut st = write_state(state);
                 if let Some(g) = st.games.get(st.selected_idx).cloned() {
                     let enabled_ids: Vec<String> =
                         st.mods.iter().filter(|m| !m.is_system && m.enabled).map(|m| m.id.clone()).collect();
                     st.config.profiles.entry(g.appid).or_default().insert(pname.clone(), enabled_ids);
                     st.save_config();
+                    st.notifier.bump();
                     st.log("OK", format!("Saved mod profile '{}'.", pname));
                 }
             }
@@ -5555,12 +5595,15 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/profile_delete" => {
             let pname = body_str(body, "name");
-            if !pname.is_empty() {
+            if pname.is_empty() {
+                log(state, "WARN", "Profile name cannot be empty.");
+            } else {
                 let mut st = write_state(state);
                 if let Some(g) = st.games.get(st.selected_idx).cloned() {
                     let removed = st.config.profiles.get_mut(&g.appid).map(|m| m.remove(&pname).is_some()).unwrap_or(false);
                     if removed {
                         st.save_config();
+                        st.notifier.bump();
                         st.log("WARN", format!("Deleted mod profile '{}'.", pname));
                     }
                 }
@@ -5659,6 +5702,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             if let Some(g) = st.games.get(st.selected_idx).cloned() {
                 if st.config.place_rules.remove(&g.appid).is_some() {
                     st.save_config();
+                    st.notifier.bump();
                     st.log("OK", format!("Gantry forgot where you said mods for {} go; it asks again.", g.name));
                 }
             }
@@ -5704,22 +5748,30 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/modio_game_set" => {
             let id: u64 = body.get("id").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0);
-            if let Some(g) = selected_game(state).filter(|g| g.is_installed && id > 0) {
+            if id == 0 {
+                log(state, "WARN", "Invalid mod.io game ID.");
+            } else if let Some(g) = selected_game(state).filter(|g| g.is_installed) {
                 let state_bg = Arc::clone(state);
                 thread::spawn(move || match modio_game_set(&state_bg, &g, id) {
                     Ok(m) => log(&state_bg, "OK", m),
                     Err(e) => log(&state_bg, "ERR", e),
                 });
+            } else {
+                log(state, "WARN", "Select an installed game first.");
             }
         }
         "/api/modio_install" => {
             let id: u64 = body.get("id").and_then(|v| v.as_u64().or_else(|| v.as_str().and_then(|s| s.parse().ok()))).unwrap_or(0);
-            if let Some(g) = selected_game(state).filter(|g| g.is_installed && id > 0) {
+            if id == 0 {
+                log(state, "WARN", "Invalid mod.io mod ID.");
+            } else if let Some(g) = selected_game(state).filter(|g| g.is_installed) {
                 let state_bg = Arc::clone(state);
                 thread::spawn(move || match modio_install(&state_bg, &g, id) {
                     Ok(m) => log(&state_bg, "OK", m),
                     Err(e) => log(&state_bg, "ERR", e),
                 });
+            } else {
+                log(state, "WARN", "Select an installed game first.");
             }
         }
         "/api/nexus_key_set" => {
@@ -5825,8 +5877,9 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             Err(e) => log(state, "WARN", e),
         }
         "/api/ue4ss_tuner_save" => {
-            if let (Ok(dto), Some(g)) = (serde_json::from_value::<Ue4ssSettingsDto>(body.clone()), selected_game(state)) {
-                match ModManager::save_ue4ss_settings(&g, &dto) {
+            let Some(g) = selected_game(state) else { return true; };
+            match serde_json::from_value::<Ue4ssSettingsDto>(body.clone()) {
+                Ok(dto) => match ModManager::save_ue4ss_settings(&g, &dto) {
                     Ok(()) => log(
                         state,
                         "UE5",
@@ -5836,13 +5889,14 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                         ),
                     ),
                     Err(e) => log(state, "ERR", e),
-                }
+                },
+                Err(e) => log(state, "WARN", format!("Invalid UE4SS settings: {}", e)),
             }
         }
         "/api/mod_config_save" => {
             let content = body.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            if let Some((_, m)) = find_mod(state, body) {
-                match ModManager::find_mod_config_file(&m) {
+            match find_mod(state, body) {
+                Some((_, m)) => match ModManager::find_mod_config_file(&m) {
                     Some(cfg_p) => match atomic_write(&cfg_p, content) {
                         Ok(()) => {
                             let fname = cfg_p.file_name().unwrap_or_default().to_string_lossy().to_string();
@@ -5851,7 +5905,8 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                         Err(e) => log(state, "ERR", format!("Could not save config for '{}': {}", m.name, e)),
                     },
                     None => log(state, "WARN", format!("'{}' has no editable config.", m.name)),
-                }
+                },
+                None => log(state, "WARN", "Could not find that mod to save config."),
             }
         }
         "/api/self_heal" => {
@@ -5959,6 +6014,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                     if p.parent() == Some(trainers_dir(&st.paths.cache_dir).as_path()) {
                         let _ = fs::remove_file(&p);
                     }
+                    st.notifier.bump();
                     st.log("OK", format!("Removed the trainer {} from {}.", trainer_display(&g.appid, &p), g.name));
                 }
             }
@@ -5970,6 +6026,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 st.config.trainers.remove(&g.appid);
                 st.save_config();
                 st.games[idx].trainer_name.clear();
+                st.notifier.bump();
                 st.log("WARN", format!("Detached trainer from '{}'.", g.name));
             }
         }
@@ -6232,6 +6289,8 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 let mut st = write_state(state);
                 st.config.thunder_community.insert(g.appid, name);
                 st.save_config();
+                st.notifier.bump();
+                st.log("OK", "Saved Thunderstore community.");
             } else {
                 log(state, "WARN", "That does not look like a Thunderstore community name.");
             }
@@ -6269,7 +6328,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/vt_key_clear" => {
             let mut st = write_state(state);
-            let _ = fs::remove_file(vt_key_file(&st));
+            clear_key_file_with_migration(&vt_key_file(&st), "virustotal_api_key");
             st.vt.key = None;
             st.vt.reports.clear();
             st.notifier.bump();
@@ -6627,8 +6686,10 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             if nexus::domain_ok(&name) {
                 if let Some(g) = selected_game(state) {
                     let mut st = write_state(state);
-                    st.config.nexus_domain.insert(g.appid, name);
+                    st.config.nexus_domain.insert(g.appid, name.clone());
                     st.save_config();
+                    st.notifier.bump();
+                    st.log("OK", format!("Saved Nexus domain '{}'.", name));
                 }
             } else {
                 log(state, "WARN", "That does not look like a Nexus Mods game name.");
@@ -8177,6 +8238,21 @@ fn read_key_with_migration(target_file: &Path, file_name: &str) -> Option<String
     None
 }
 
+fn clear_key_file_with_migration(target_file: &Path, file_name: &str) {
+    let _ = fs::remove_file(target_file);
+    let hp = home_dir();
+    let candidates = [
+        hp.join(".config/modforge").join(file_name),
+        hp.join(".config/gantry").join(file_name),
+        hp.join(".config/protonrig").join(file_name),
+    ];
+    for cand in &candidates {
+        if cand != target_file {
+            let _ = fs::remove_file(cand);
+        }
+    }
+}
+
 fn steam_key_file(st: &AppState) -> PathBuf {
     st.paths.config_file.with_file_name("steam_web_api_key")
 }
@@ -8290,7 +8366,7 @@ fn set_steam_key(state: &SharedState, key: &str) -> Result<String, String> {
 
 fn clear_steam_key(state: &SharedState) {
     let mut st = write_state(state);
-    let _ = fs::remove_file(steam_key_file(&st));
+    clear_key_file_with_migration(&steam_key_file(&st), "steam_web_api_key");
     let _ = fs::remove_file(steam_owned_file(&st));
     st.steam_lib.key = None;
     st.steam_lib.owned.clear();
@@ -8365,7 +8441,7 @@ fn set_modio_key(state: &SharedState, key: &str) -> Result<String, String> {
 
 fn clear_modio_key(state: &SharedState) {
     let mut st = write_state(state);
-    let _ = fs::remove_file(modio_key_file(&st));
+    clear_key_file_with_migration(&modio_key_file(&st), "modio_api_key");
     st.modio.key = None;
     st.notifier.bump();
 }
@@ -8379,9 +8455,18 @@ fn modio_client(state: &SharedState) -> Result<modio::Modio, String> {
 /// The mod.io game that is `g`: its remembered number, else the one named like it. Games whose makers do not let other
 /// programs download their mods are reported as such.
 fn modio_game_for(state: &SharedState, g: &GameEntry) -> Result<u64, String> {
+    {
+        let st = read_state(state);
+        if let Some(id) = st.config.modio_game.get(&g.appid) {
+            return Ok(*id);
+        }
+    }
     let file = read_state(state).cache_root().join("modio_games.json");
     let mut known: std::collections::HashMap<String, u64> = fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     if let Some(id) = known.get(&g.appid) {
+        let mut st = write_state(state);
+        st.config.modio_game.insert(g.appid.clone(), *id);
+        st.save_config();
         return Ok(*id);
     }
     let client = modio_client(state)?;
@@ -8390,10 +8475,15 @@ fn modio_game_for(state: &SharedState, g: &GameEntry) -> Result<u64, String> {
     let want = norm(&g.name);
     let hit = found.iter().find(|x| norm(&x.name) == want).ok_or_else(|| format!("mod.io has no game called {}.", g.name))?;
     if !hit.open {
-        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so Gantry cannot download them.", g.name));
+        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so Gantry cannot download them.", hit.name));
     }
     known.insert(g.appid.clone(), hit.id);
     let _ = fsutil::atomic_write(&file, serde_json::to_string(&known).unwrap_or_default());
+    {
+        let mut st = write_state(state);
+        st.config.modio_game.insert(g.appid.clone(), hit.id);
+        st.save_config();
+    }
     Ok(hit.id)
 }
 
@@ -8421,6 +8511,12 @@ fn modio_game_set(state: &SharedState, g: &GameEntry, id: u64) -> Result<String,
     let game = client.game(id)?.ok_or("mod.io has no such game or mod.")?;
     if !game.open {
         return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so Gantry cannot download them.", game.name));
+    }
+    {
+        let mut st = write_state(state);
+        st.config.modio_game.insert(g.appid.clone(), game.id);
+        st.save_config();
+        st.notifier.bump();
     }
     let file = read_state(state).cache_root().join("modio_games.json");
     let mut known: std::collections::HashMap<String, u64> = fs::read(&file).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
@@ -9290,7 +9386,7 @@ fn set_nexus_key(state: &SharedState, key: &str) -> Result<String, String> {
 
 fn clear_nexus_key(state: &SharedState) {
     let mut st = write_state(state);
-    let _ = fs::remove_file(nexus_key_file(&st));
+    clear_key_file_with_migration(&nexus_key_file(&st), "nexus_api_key");
     st.nexus.key = None;
     st.nexus.user = None;
     st.nexus.pending = None;
@@ -14641,7 +14737,7 @@ mod tests {
         fs::create_dir_all(dir.join("EasyAntiCheat")).unwrap();
         let g = game_by_appid(&h.state, "plain1").unwrap();
         for sort in ["popular", "starter"] {
-            let v = store_page(&h.state, &g, &StoreAsk { source: "both".into(), sort: sort.into(), query: String::new(), category: String::new(), off_nexus: 0, off_thunder: 0, per: 10, hide_libs: true });
+            let v = store_page(&h.state, &g, &StoreAsk { source: "both".into(), sort: sort.into(), query: String::new(), category: String::new(), off_nexus: 0, off_thunder: 0, off_modio: 0, per: 10, hide_libs: true });
             assert!(v["cards"].as_array().unwrap().is_empty(), "{v}");
             assert_eq!(v["notes"][0]["source"], "game");
             assert!(v["notes"][0]["error"].as_str().unwrap().contains("Easy Anti-Cheat"), "{v}");
@@ -17534,5 +17630,101 @@ mod tests {
         assert_eq!(st.logs.front().unwrap().message, "m50");
         assert_eq!(st.last_toast, format!("m{}", MAX_LOG_HISTORY + 49));
         assert!(st.to_json()["games"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn store_pagination_isolation_and_state_hints() {
+        let h = harness("store_state_hints");
+        {
+            let mut st = h.state.write().unwrap();
+            st.modio.key = Some("1234567890abcdef".into());
+            st.vt.key = Some("abcdef1234567890".into());
+            st.config.virustotal = true;
+            // Add an uninstalled game with stale health and update
+            let mut uninstalled = h.game.clone();
+            uninstalled.appid = "uninstalled_999".into();
+            uninstalled.name = "Uninstalled Game".into();
+            uninstalled.is_installed = false;
+            st.games.push(uninstalled);
+            st.health.insert("uninstalled_999".into(), "warn".into());
+            st.nexus.updates.push(UpdateRow {
+                appid: "uninstalled_999".into(),
+                game: "Uninstalled Game".into(),
+                lib_id: "mod1".into(),
+                name: "Some Mod".into(),
+                installed_version: "1.0".into(),
+                new_version: "2.0".into(),
+                new_file_id: 123,
+                new_file_name: "mod.zip".into(),
+                changes: String::new(),
+                nexus: nexus::NexusRef { game: "uninstalled".into(), mod_id: 1, file_id: 1 },
+                page_url: String::new(),
+            });
+        }
+        let state = api(&h, "/api/state", json!({}));
+        assert_eq!(state["modio"]["configured"], true);
+        assert_eq!(state["modio"]["key_hint"], "…cdef");
+        assert_eq!(state["settings"]["vt_key"], true);
+        assert_eq!(state["settings"]["vt_key_hint"], "…7890");
+        // Ensure uninstalled game's health and updates are never leaked to client
+        assert!(state["health"].get("uninstalled_999").is_none());
+        let nx_updates = state["nexus"]["updates"].as_array().unwrap();
+        assert!(!nx_updates.iter().any(|u| u["appid"] == "uninstalled_999"));
+    }
+
+    #[test]
+    fn profile_save_validation_and_notifier() {
+        let h = harness("prof_val");
+        // Empty profile name should be rejected with warning and never stored
+        api(&h, "/api/profile_save", json!({ "name": "" }));
+        assert!(last_log(&h).contains("empty"));
+        assert_eq!(h.state.read().unwrap().config.profiles.get(&h.game.appid).and_then(|m| m.get("")), None);
+
+        // Valid profile name should be accepted, bump notifier, and be stored in config
+        let v1 = h.state.read().unwrap().notifier.version.load(Ordering::SeqCst);
+        api(&h, "/api/profile_save", json!({ "name": "Speedrun" }));
+        assert!(last_log(&h).contains("Speedrun"));
+        assert!(h.state.read().unwrap().notifier.version.load(Ordering::SeqCst) > v1);
+        assert!(h.state.read().unwrap().config.profiles.get(&h.game.appid).and_then(|m| m.get("Speedrun")).is_some());
+    }
+
+    #[test]
+    fn key_file_clearing_purges_migration_candidates() {
+        let h = harness("purge_cand");
+        let target = h._dir.join("target_key");
+        let hp = home_dir();
+        let old1 = hp.join(".config/gantry/test_key_purge");
+        let old2 = hp.join(".config/protonrig/test_key_purge");
+        let _ = fs::create_dir_all(old1.parent().unwrap());
+        let _ = fs::create_dir_all(old2.parent().unwrap());
+        fs::write(&target, "secret_key").unwrap();
+        let _ = fs::write(&old1, "old_secret_1");
+        let _ = fs::write(&old2, "old_secret_2");
+
+        clear_key_file_with_migration(&target, "test_key_purge");
+        assert!(!target.exists());
+        assert!(!old1.exists());
+        assert!(!old2.exists());
+    }
+
+    #[test]
+    fn modio_game_selection_persists_in_config() {
+        let h = harness("modio_cfg");
+        let g = selected_game(&h.state).unwrap();
+        let f = modio::fake::start(vec![]);
+        {
+            let mut st = h.state.write().unwrap();
+            st.modio.key = Some(modio::fake::KEY.into());
+            st.modio.base = f.base.clone();
+            st.modio.allow_http = true;
+        }
+        let res = modio_game_set(&h.state, &g, 7);
+        assert!(res.is_ok(), "{res:?}");
+        {
+            let st = h.state.read().unwrap();
+            assert_eq!(st.config.modio_game.get(&g.appid), Some(&7));
+        }
+        let resolved = modio_game_for(&h.state, &g);
+        assert_eq!(resolved.unwrap(), 7);
     }
 }
