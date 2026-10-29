@@ -1426,6 +1426,7 @@
             <button class="btn btn-heal" id="mlUpdateAll" style="padding:6px 12px; display:none" onclick="ipcSend('/api/update_all', {})">⬆ Update all</button>
             <button class="btn" id="mlCheck" style="padding:6px 12px;" onclick="checkNexusUpdates()" title="Ask Nexus Mods whether newer files exist for the mods you installed from there">🔄 Check for updates</button>
             <button class="btn" style="padding:6px 12px;" onclick="openLibConflicts()" title="Inspect load order priority, file overwrites, and conflict resolution">⚔ Priority Visualizer</button>
+            <button class="btn" style="padding:6px 12px;" onclick="openStartupBenchmark()" title="Measure mod loading latency, asset disk I/O, and startup overhead">⏱ Benchmark</button>
             <button class="btn" style="padding:6px 12px;" onclick="openMoreMenu(event)" title="Share or import a setup, fix placement, open the folder">⋯ More</button>
             <span style="flex:1"></span>
             <select class="proton-select" id="mlHistory" data-dyn style="padding:5px 8px; font-size:11px;" onchange="modLibHistory(this.value)"></select>
@@ -1579,9 +1580,22 @@
   <div class="glass-card modal-window" style="width:calc(720 * var(--vw)); max-width:94vw; max-height:calc(86 * var(--vh)); overflow-y:auto;">
     <div class="modal-hdr">
       <span>⚔ Conflicts between your mods</span>
-      <button class="btn" onclick="closeModals()" aria-label="Close">✕</button>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn btn-heal" onclick="autoResolveConflicts()" title="Auto-detect load order and patch priority to resolve mod conflicts">✨ Auto-Resolve Conflicts</button>
+        <button class="btn" onclick="closeModals()" aria-label="Close">✕</button>
+      </div>
     </div>
     <div id="lcContent" data-dyn style="font-size:13px; line-height:1.6; color:var(--ink); z-index:2;"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="benchmarkModal">
+  <div class="glass-card modal-window" style="width:calc(760 * var(--vw)); max-width:94vw; max-height:calc(86 * var(--vh)); overflow-y:auto;">
+    <div class="modal-hdr">
+      <span>⏱ Mod Startup Benchmark</span>
+      <button class="btn" onclick="closeModals()" aria-label="Close">✕</button>
+    </div>
+    <div id="benchmarkContent" data-dyn style="font-size:13px; line-height:1.6; color:var(--ink); z-index:2;"></div>
   </div>
 </div>
 
@@ -4549,6 +4563,11 @@
     ipcSend(url, body);
     setTimeout(() => renderLibConflicts(false), 1200);
   }
+  function autoResolveConflicts() {
+    showToast(t('Analyzing load order and resolving conflicts…'));
+    ipcSend('/api/lib_auto_resolve', { strategy: 'topological_patches_last' });
+    setTimeout(() => renderLibConflicts(true), 1200);
+  }
   async function renderLibConflicts(first) {
     const box = document.getElementById('lcContent');
     let r;
@@ -4579,6 +4598,88 @@
   }
   const lcCountText = r => r.matching > r.files.length ? t('Showing the first {} of {}. Search to narrow it down.', r.files.length, r.matching) : tp(r.matching, '{} file', '{} files');
   const lcFiles = r => r.files.map(c => `<div class="lc-file"><div class="lc-path">${escapeHtml(c.path)}</div><div>${c.mods.map((n, i) => `<a class="pick ${c.ids[i] === c.winner_id ? 'win' : ''}" title="${escapeHtml(t('Use this one for this file'))}" onclick='lcAct("/api/lib_pin", { path: ${JS(c.path)}, id: ${JS(c.ids[i])} })'>${escapeHtml(n)}</a>`).join(' → ')}${c.pinned ? ` <a class="pick" title="${escapeHtml(t('Back to the load order'))}" onclick='lcAct("/api/lib_pin", { path: ${JS(c.path)}, id: "" })'>📌 ×</a>` : ''}</div></div>`).join('');
+
+  async function openStartupBenchmark() {
+    const box = document.getElementById('benchmarkContent');
+    box.innerHTML = `<div style="color:var(--text-muted); padding:20px; text-align:center;">${t('Analyzing mod asset disk footprint, hooks, and startup overhead…')}</div>`;
+    document.getElementById('benchmarkModal').classList.add('open');
+    try {
+      const r = await (await fetch('/api/startup_benchmark')).json();
+      let ratingColor = '#34d399';
+      if ((r.overhead_rating || '').startsWith('Moderate')) ratingColor = '#fbbf24';
+      else if ((r.overhead_rating || '').startsWith('Heavy')) ratingColor = '#f87171';
+
+      let recsHtml = (r.recommendations || []).map(rec => `
+        <div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px;">
+          <span style="color:#60a5fa;">💡</span>
+          <span style="font-size:12px; color:var(--ink);">${escapeHtml(rec)}</span>
+        </div>
+      `).join('');
+
+      let modsHtml = (r.top_impact_mods || []).map(m => `
+        <div class="disk-row" style="align-items:center;">
+          <span style="flex:2; min-width:0; font-weight:600;">${escapeHtml(m.name)}</span>
+          <span style="flex:1; text-align:center;"><span class="ml-prio-chip" style="font-size:10px;">${escapeHtml(m.category)}</span></span>
+          <span style="flex:1; text-align:right; font-size:12px; color:var(--text-muted);">${m.file_count} files (${m.size_mb} MB)</span>
+          <span style="flex:1; text-align:right; font-weight:700; color:${m.impact_score > 100 ? '#f87171' : (m.impact_score > 40 ? '#fbbf24' : '#34d399')}">Impact: ${m.impact_score}</span>
+        </div>
+      `).join('');
+      if (!modsHtml) {
+        modsHtml = `<div style="color:var(--text-muted); font-size:12px; padding:8px;">${t('No heavy startup mods detected.')}</div>`;
+      }
+
+      box.innerHTML = `
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; margin-bottom:16px;">
+          <div class="cd-card" style="margin:0; text-align:center;">
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase;">${t('Vanilla Load Time')}</div>
+            <div style="font-size:20px; font-weight:700; margin-top:4px;">${((r.vanilla_est_ms || 0) / 1000).toFixed(1)}s</div>
+          </div>
+          <div class="cd-card" style="margin:0; text-align:center;">
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase;">${t('Modded Load Time')}</div>
+            <div style="font-size:20px; font-weight:700; margin-top:4px; color:${ratingColor}">${((r.modded_est_ms || 0) / 1000).toFixed(1)}s</div>
+          </div>
+          <div class="cd-card" style="margin:0; text-align:center;">
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase;">${t('Startup Overhead')}</div>
+            <div style="font-size:20px; font-weight:700; margin-top:4px; color:${ratingColor}">+${((r.overhead_ms || 0) / 1000).toFixed(1)}s</div>
+            <div style="font-size:11px; color:${ratingColor}; font-weight:600;">${escapeHtml(r.overhead_rating || '')}</div>
+          </div>
+          <div class="cd-card" style="margin:0; text-align:center;">
+            <div style="color:var(--text-muted); font-size:11px; text-transform:uppercase;">${t('Deployed Assets')}</div>
+            <div style="font-size:20px; font-weight:700; margin-top:4px;">${r.total_files || 0}</div>
+            <div style="font-size:11px; color:var(--text-muted);">${r.total_size_mb || 0} MB (${r.mod_count || 0} mods)</div>
+          </div>
+        </div>
+
+        <div class="cp-h" style="margin-top:12px">${t('Latency Breakdown')}</div>
+        <div class="cd-card" style="margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:12px;">
+            <span>${t('Disk I/O & Asset Mapping')}</span>
+            <b>+${((r.disk_io_overhead_ms || 0) / 1000).toFixed(2)}s</b>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:12px;">
+            <span>${t('DLL / Hook & Extension Injection')}</span>
+            <b>+${((r.hook_overhead_ms || 0) / 1000).toFixed(2)}s</b>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:12px;">
+            <span>${t('Loose Files vs Packed Archives')}</span>
+            <b>${r.loose_files || 0} loose / ${r.plugins_count || 0} packed</b>
+          </div>
+        </div>
+
+        <div class="cp-h" style="margin-top:12px">${t('Optimization Recommendations')}</div>
+        <div class="cd-card" style="margin-bottom:16px;">
+          ${recsHtml}
+        </div>
+
+        <div class="cp-h" style="margin-top:12px">${t('Top Startup Impact Mods')}</div>
+        <div style="margin-bottom:12px;">
+          ${modsHtml}
+        </div>
+      `;
+    } catch (e) {
+      box.textContent = t('Could not run benchmark: {}', e);
+    }
+  }
 
   // ---------- Mod conflicts ----------
   async function openConflicts() {

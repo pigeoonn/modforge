@@ -392,6 +392,14 @@ pub struct PurgeReport {
     pub kept: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConflictResolutionReport {
+    pub resolved_conflicts: usize,
+    pub reordered_mods: Vec<String>,
+    pub auto_pinned_files: Vec<(String, String)>,
+    pub strategy: String,
+}
+
 struct Analysis {
     files: Vec<PathBuf>,
     cleaned: Vec<Option<String>>,
@@ -2223,6 +2231,95 @@ impl Library {
         Ok(n)
     }
 
+    /// Automatically resolve file conflicts between enabled mods using smart topological priority:
+    /// - Specific patches and compatibility fixes win over large base texture packs.
+    /// - Base overhauls and community patches load first so sub-mods can overwrite them cleanly.
+    pub fn auto_resolve_conflicts(&self, strategy: &str) -> Result<ConflictResolutionReport, String> {
+        let _g = lock();
+        let mut lf = self.load();
+        let initial_conflicts = self.build_plan(&lf.mods, &lf.pins).conflicts;
+        if initial_conflicts.is_empty() {
+            return Ok(ConflictResolutionReport {
+                resolved_conflicts: 0,
+                reordered_mods: Vec::new(),
+                auto_pinned_files: Vec::new(),
+                strategy: strategy.to_string(),
+            });
+        }
+
+        lf.snapshot("Auto-resolved mod conflicts".into());
+
+        let is_patch = |name: &str| {
+            let n = name.to_lowercase();
+            n.contains("patch") || n.contains("hotfix") || n.contains("fix") || n.contains("compat") || n.contains("update")
+        };
+
+        let is_base = |name: &str| {
+            let n = name.to_lowercase();
+            n.contains("unofficial") || n.contains("base") || n.contains("overhaul") || n.contains("core") || n.contains("framework")
+        };
+
+        let mut auto_pinned = Vec::new();
+
+        for c in &initial_conflicts {
+            if c.pinned { continue; }
+            if let Some(patch_id) = c.ids.iter().find(|id| {
+                lf.mods.iter().find(|m| &m.id == *id).map(|m| is_patch(&m.name)).unwrap_or(false)
+            }) {
+                if patch_id != &c.winner_id {
+                    let patch_mod = lf.mods.iter().find(|m| &m.id == patch_id).unwrap();
+                    lf.pins.insert(c.path.to_lowercase(), patch_id.clone());
+                    auto_pinned.push((c.path.clone(), patch_mod.name.clone()));
+                }
+            }
+        }
+
+        let mut reordered = Vec::new();
+        let mut new_mods = lf.mods.clone();
+        new_mods.sort_by(|a, b| {
+            let a_base = is_base(&a.name);
+            let b_base = is_base(&b.name);
+            let a_patch = is_patch(&a.name);
+            let b_patch = is_patch(&b.name);
+
+            if a_base && !b_base {
+                std::cmp::Ordering::Less
+            } else if !a_base && b_base {
+                std::cmp::Ordering::Greater
+            } else if a_patch && !b_patch {
+                std::cmp::Ordering::Greater
+            } else if !a_patch && b_patch {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        });
+
+        if new_mods.iter().map(|m| &m.id).ne(lf.mods.iter().map(|m| &m.id)) {
+            for (idx, m) in new_mods.iter().enumerate() {
+                if m.id != lf.mods[idx].id {
+                    reordered.push(m.name.clone());
+                }
+            }
+            lf.mods = new_mods;
+        }
+
+        let post_plan = self.build_plan(&lf.mods, &lf.pins);
+        let resolved = initial_conflicts.len().saturating_sub(
+            post_plan.conflicts.iter().filter(|c| !c.pinned).count()
+        ) + auto_pinned.len();
+
+        lf.dirty = true;
+        self.save(&lf)?;
+
+        Ok(ConflictResolutionReport {
+            resolved_conflicts: resolved,
+            reordered_mods: reordered,
+            auto_pinned_files: auto_pinned,
+            strategy: strategy.to_string(),
+        })
+    }
+
     // ───────────────────────────── deploy / purge ─────────────────────────────
 
     fn is_ours(&self, e: &Placed) -> bool {
@@ -3892,5 +3989,19 @@ mod tests {
         lib.deploy(false).unwrap();
         let s = lib.status_json();
         assert_eq!((s["dirty"].as_bool(), s["overwrites"].as_u64(), s["deployed"].as_u64()), (Some(false), Some(0), Some(1)));
+    }
+
+    #[test]
+    fn auto_resolve_conflicts_reorders_patches_after_base_and_auto_pins() {
+        let (d, _g, lib) = setup("auto-resolve");
+        lib.add_from_dir(&stage(&d, "patch", &[("Data/config.ini", "Patch Config")]), "Balance Compatibility Patch", "patch.zip").unwrap();
+        lib.add_from_dir(&stage(&d, "base", &[("Data/config.ini", "Base Config"), ("Data/main.esm", "Base ESM")]), "Total Overhaul Base", "base.zip").unwrap();
+
+        let report = lib.auto_resolve_conflicts("topological_patches_last").unwrap();
+        assert!(report.resolved_conflicts > 0);
+
+        let mods = lib.mods();
+        assert_eq!(mods[0].name, "Total Overhaul Base");
+        assert_eq!(mods[1].name, "Balance Compatibility Patch");
     }
 }

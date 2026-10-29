@@ -5019,6 +5019,16 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             return respond_json(req, 200, body.to_string());
         }
         "/api/perf" => return respond_json(req, 200, perf_json(&state).to_string()),
+        "/api/startup_benchmark" => {
+            let res = selected_game(&state)
+                .map(|g| {
+                    let lib = library_of(&g);
+                    let mods = lib.as_ref().map(|l| l.mods()).unwrap_or_default();
+                    perf::benchmark_startup(g.steam_id(), &g.name, &mods)
+                })
+                .unwrap_or_default();
+            return respond_json(req, 200, serde_json::to_string(&res).unwrap_or_else(|_| "{}".into()));
+        }
         "/api/conflict_view" => {
             let q = query_param(&query, "q").unwrap_or_default();
             let body = selected_game(&state)
@@ -6562,6 +6572,16 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 if lib.clear_pins()? == 0 {
                     return Ok("No files are pinned.".into());
                 }
+                library_apply(st, lib, false)
+            });
+        }
+        "/api/lib_auto_resolve" => {
+            let strategy = body_str(body, "strategy");
+            let strat = if strategy.is_empty() { "topological_patches_last".to_string() } else { strategy };
+            library_task(state, move |st, lib, _| {
+                running_guard(st)?;
+                let report = lib.auto_resolve_conflicts(&strat)?;
+                log(st, "OK", format!("Resolved {} conflict(s) across mods.", report.resolved_conflicts));
                 library_apply(st, lib, false)
             });
         }
@@ -17962,5 +17982,35 @@ mod tests {
         let sid = item.appid;
         assert!(grid.join(format!("{sid}p.png")).exists());
         assert_eq!(fs::read(grid.join(format!("{sid}p.png"))).unwrap(), b"CUSTOM_ART");
+    }
+
+    #[test]
+    fn startup_benchmark_and_conflict_auto_resolve_endpoints_operate_correctly() {
+        let h = harness("bench_resolve");
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+
+        let s1 = h._dir.join("test-patch");
+        fs::create_dir_all(s1.join("Data")).unwrap();
+        fs::write(s1.join("Data/settings.ini"), "PATCH").unwrap();
+        lib.add_with(&s1, "Compatibility Patch", "patch.zip", None, "1.0").unwrap();
+
+        let s2 = h._dir.join("test-base");
+        fs::create_dir_all(s2.join("Data")).unwrap();
+        fs::write(s2.join("Data/settings.ini"), "BASE").unwrap();
+        lib.add_with(&s2, "Base Overhaul", "base.zip", None, "1.0").unwrap();
+        refresh_mods_shared(&h.state);
+
+        let (code, text) = http(&h, "GET", "/api/startup_benchmark", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(code, 200);
+        let bm: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(bm["mod_count"].as_u64(), Some(2));
+        assert!(bm["overhead_ms"].as_u64().unwrap() > 0);
+
+        api(&h, "/api/lib_auto_resolve", json!({ "strategy": "topological_patches_last" }));
+        wait_until("conflicts auto resolved", || {
+            let m = lib.mods();
+            m.len() == 2 && m[0].name == "Base Overhaul" && m[1].name == "Compatibility Patch"
+        });
     }
 }

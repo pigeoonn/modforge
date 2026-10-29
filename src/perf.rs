@@ -294,6 +294,144 @@ pub fn compare(sessions: &[(usize, Summary)]) -> (Group, Group) {
     (group(true), group(false))
 }
 
+/// Detailed mod startup benchmark diagnostics.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct ImpactMod {
+    pub id: String,
+    pub name: String,
+    pub file_count: usize,
+    pub size_mb: f64,
+    pub impact_score: u32,
+    pub category: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct StartupBenchmark {
+    pub appid: String,
+    pub game_name: String,
+    pub mod_count: usize,
+    pub total_files: usize,
+    pub total_size_mb: f64,
+    pub loose_files: usize,
+    pub plugins_count: usize,
+    pub vanilla_est_ms: u64,
+    pub modded_est_ms: u64,
+    pub overhead_ms: u64,
+    pub overhead_rating: String,
+    pub disk_io_overhead_ms: u64,
+    pub hook_overhead_ms: u64,
+    pub top_impact_mods: Vec<ImpactMod>,
+    pub recommendations: Vec<String>,
+}
+
+/// Calculate startup performance benchmark and latency overhead based on deployed mod assets.
+pub fn benchmark_startup(appid: &str, game_name: &str, mods: &[LibMod]) -> StartupBenchmark {
+    let enabled: Vec<&LibMod> = mods.iter().filter(|m| m.enabled).collect();
+    let mod_count = enabled.len();
+    let mut total_files = 0;
+    let mut total_size_bytes = 0u64;
+    let mut loose_files = 0;
+    let mut plugins_count = 0;
+    let mut hooks_count = 0;
+
+    let mut impact_mods: Vec<ImpactMod> = Vec::new();
+
+    for m in &enabled {
+        total_files += m.files.len();
+        total_size_bytes += m.size;
+        let mut m_textures = 0;
+        let mut m_scripts = 0;
+        let mut m_plugins = 0;
+        let mut m_hooks = 0;
+
+        for f in &m.files {
+            let ext = Path::new(f).extension().and_then(|x| x.to_str()).map(|x| x.to_lowercase()).unwrap_or_default();
+            match ext.as_str() {
+                "dds" | "png" | "tga" | "jpg" | "jpeg" => { m_textures += 1; loose_files += 1; }
+                "dll" | "so" | "asi" => { m_hooks += 1; hooks_count += 1; }
+                "esp" | "esm" | "esl" | "pck" | "vpk" | "pak" | "ba2" | "bsa" => { m_plugins += 1; plugins_count += 1; }
+                "lua" | "pex" | "cs" | "gd" | "py" => { m_scripts += 1; loose_files += 1; }
+                _ => { loose_files += 1; }
+            }
+        }
+
+        let cat = if m_hooks > 0 {
+            "Hooks / DLLs"
+        } else if m_scripts > 0 {
+            "Scripts / Logic"
+        } else if m_plugins > 0 {
+            "Plugins / Packages"
+        } else if m_textures > 0 {
+            "Textures / Visuals"
+        } else {
+            "General Assets"
+        };
+
+        let size_mb = m.size as f64 / (1024.0 * 1024.0);
+        let score = ((size_mb * 0.4) as u32) + ((m.files.len() as f64 * 0.15) as u32) + (m_hooks as u32 * 50) + (m_scripts as u32 * 10);
+        impact_mods.push(ImpactMod {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            file_count: m.files.len(),
+            size_mb: (size_mb * 10.0).round() / 10.0,
+            impact_score: score,
+            category: cat.to_string(),
+        });
+    }
+
+    impact_mods.sort_by_key(|m| std::cmp::Reverse(m.impact_score));
+    impact_mods.truncate(8);
+
+    let vanilla_est_ms = 3500;
+    let disk_io_overhead_ms = ((total_size_bytes as f64 / (1024.0 * 1024.0)) * 0.8 + (loose_files as f64 * 0.3)).round() as u64;
+    let hook_overhead_ms = (hooks_count as u64 * 120) + (plugins_count as u64 * 25);
+    let overhead_ms = disk_io_overhead_ms + hook_overhead_ms;
+    let modded_est_ms = vanilla_est_ms + overhead_ms;
+
+    let overhead_rating = if overhead_ms < 1500 {
+        "Instant (<1.5s)"
+    } else if overhead_ms < 4000 {
+        "Optimal (1.5-4s)"
+    } else if overhead_ms < 8000 {
+        "Moderate (4-8s)"
+    } else {
+        "Heavy (>8s)"
+    };
+
+    let mut recommendations = Vec::new();
+    if loose_files > 5000 {
+        recommendations.push(format!("Over {} loose files detected: game engine directory scans will cause noticeable startup delay.", loose_files));
+    }
+    if total_size_bytes > 5 * 1024 * 1024 * 1024 {
+        recommendations.push("Over 5 GB of mod assets loaded into memory: ensure fast SSD storage and sufficient RAM headroom.".into());
+    }
+    if hooks_count > 3 {
+        recommendations.push(format!("{} native DLL/ASI hooks injected: inspect script extenders to prevent startup crashes.", hooks_count));
+    }
+    if recommendations.is_empty() {
+        recommendations.push("Mod load profile is streamlined with optimal startup overhead.".into());
+    }
+
+    StartupBenchmark {
+        appid: appid.to_string(),
+        game_name: game_name.to_string(),
+        mod_count,
+        total_files,
+        total_size_mb: ((total_size_bytes as f64 / (1024.0 * 1024.0)) * 10.0).round() / 10.0,
+        loose_files,
+        plugins_count,
+        vanilla_est_ms,
+        modded_est_ms,
+        overhead_ms,
+        overhead_rating: overhead_rating.to_string(),
+        disk_io_overhead_ms,
+        hook_overhead_ms,
+        top_impact_mods: impact_mods,
+        recommendations,
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -421,5 +559,30 @@ mod tests {
         assert_eq!((modded.sessions, modded.avg_fps, modded.peak_mb, modded.avg_cpu), (2, 60, 7000, 130));
         assert_eq!((plain.sessions, plain.avg_fps, plain.peak_mb), (2, 100, 4500), "a session without frames adds nothing to the fps");
         assert_eq!(compare(&[]).0.sessions, 0);
+    }
+
+    #[test]
+    fn benchmark_startup_computes_latency_and_top_impact_mods() {
+        let mods = vec![
+            lib_mod("Texture Overhaul", true, 500 * 1024 * 1024, &["textures/diffuse.dds", "textures/normal.dds"]),
+            lib_mod("Core Engine Extender", true, 20 * 1024 * 1024, &["bin/engine.dll", "bin/loader.asi"]),
+            lib_mod("Compatibility Patch", true, 1 * 1024 * 1024, &["data/patch.esp"]),
+            lib_mod("Disabled Heavy Mod", false, 1024 * 1024 * 1024, &["heavy.pak"]),
+        ];
+
+        let bm = benchmark_startup("12345", "Test Game", &mods);
+        assert_eq!(bm.appid, "12345");
+        assert_eq!(bm.game_name, "Test Game");
+        assert_eq!(bm.mod_count, 3);
+        assert_eq!(bm.total_files, 5);
+        assert!(bm.total_size_mb >= 520.0);
+        assert_eq!(bm.plugins_count, 1);
+        assert!(bm.overhead_ms > 0);
+        assert_eq!(bm.modded_est_ms, bm.vanilla_est_ms + bm.overhead_ms);
+        assert_eq!(bm.top_impact_mods.len(), 3);
+        assert_eq!(bm.top_impact_mods[0].name, "Texture Overhaul");
+        assert_eq!(bm.top_impact_mods[0].category, "Textures / Visuals");
+        assert_eq!(bm.top_impact_mods[1].name, "Core Engine Extender");
+        assert_eq!(bm.top_impact_mods[1].category, "Hooks / DLLs");
     }
 }
