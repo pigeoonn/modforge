@@ -167,6 +167,18 @@ impl Bisect {
         }
     }
 
+    /// Estimated progress percentage (0..100) through the diagnostic process.
+    pub fn progress_pct(&self) -> u32 {
+        if self.is_finished() {
+            return 100;
+        }
+        let total_est = self.round + self.rounds_left();
+        if total_est == 0 {
+            return 0;
+        }
+        ((self.round.saturating_sub(1) * 100) / total_est).min(95)
+    }
+
     /// The set of mods to leave enabled when the session ends.
     pub fn final_enabled(&self, restore_all: bool) -> Vec<String> {
         if restore_all || self.phase == Phase::GaveUp {
@@ -307,5 +319,18 @@ mod tests {
         d.answer(true, 1);
         assert_eq!(d, snapshot);
         assert_eq!(d.rounds_left(), 0);
+        assert_eq!(d.progress_pct(), 100);
+    }
+
+    #[test]
+    fn progress_pct_starts_low_and_ends_at_100() {
+        let mut b = Bisect::new("1", ids(10), vec![], 0).unwrap();
+        assert_eq!(b.progress_pct(), 0);
+        b.answer(false, 1);
+        assert!(b.progress_pct() > 0 && b.progress_pct() < 100);
+        while !b.is_finished() {
+            b.answer(false, 2);
+        }
+        assert_eq!(b.progress_pct(), 100);
     }
 }

@@ -1,0 +1,12 @@
+PackageIdentifier: pigeoonn.ModForge
+PackageVersion: 5.4.0
+PackageLocale: en-US
+Publisher: pigeoonn
+PackageName: ModForge
+PackageUrl: https://github.com/pigeoonn/modforge
+License: GPL-3.0-or-later
+ShortDescription: Mod, trainer and crash-hunting hub for games.
+Description: ModForge installs and manages mods for your games (Steam, Hydra, Heroic, Lutris), keeps every change reversible, reads Nexus Mods and Thunderstore pages, runs mod installers and finds the mod that crashes a game.
+Tags: [mods, nexus, thunderstore, steam, bepinex, melonloader, reframework, witcher]
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

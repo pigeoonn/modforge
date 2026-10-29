@@ -857,6 +857,14 @@ impl Library {
                 || source_info.as_ref().map(|s| s.game_dir_name.eq_ignore_ascii_case(n)).unwrap_or(false)
         };
 
+        // RE Engine games (Resident Evil, Monster Hunter, Dragon's Dogma 2)
+        let re_engine = crate::loaders::detect_re_engine(&self.game_dir).is_some() || self.exists_ci(Path::new(""), "reframework") || self.exists_ci(Path::new(""), "natives");
+        let re_dir = |n: &str| ["reframework", "natives", "autorun", "plugins"].contains(&n.to_lowercase().as_str());
+
+        // Witcher 3 games (REDengine 3)
+        let witcher = crate::loaders::detect_witcher3(&self.game_dir).is_some();
+        let witcher_dir = |n: &str| ["mods", "dlc", "content", "bin"].contains(&n.to_lowercase().as_str());
+
         let mut strip = 0usize;
         loop {
             let mut tops: BTreeSet<String> = BTreeSet::new();
@@ -878,6 +886,8 @@ impl Library {
                     || (bethesda && bethesda_dir(&top))
                     || (godot && godot_dir(&top))
                     || (has_source && source_dir(&top))
+                    || (re_engine && re_dir(&top))
+                    || (witcher && witcher_dir(&top))
                 {
                     break; // a real game folder, keep it
                 }
@@ -1864,6 +1874,127 @@ impl Library {
         lf.dirty = true;
         self.save(&lf)?;
         Ok(changing)
+    }
+
+    /// Automatically optimize the load order based on mod dependencies, core frameworks,
+    /// script loaders, and asset types. Returns the total count of mods in the sorted library.
+    pub fn optimize_load_order(&self) -> Result<usize, String> {
+        let _g = lock();
+        let mut lf = self.load();
+        if lf.mods.len() <= 1 {
+            return Ok(lf.mods.len());
+        }
+        let total = lf.mods.len();
+        lf.snapshot("Auto-sorted load order".into());
+
+        fn tier_score(m: &LibMod) -> u32 {
+            let n = m.name.to_lowercase();
+            let grp = m.group.to_lowercase();
+            // Tier 10: Engine Loaders & Script Extenders
+            if n.contains("red4ext")
+                || n.contains("ue4ss")
+                || n.contains("bepinex")
+                || n.contains("melonloader")
+                || n.contains("reframework")
+                || n.contains("skse")
+                || n.contains("f4se")
+                || n.contains("nvse")
+                || n.contains("obse")
+                || n.contains("gdweave")
+                || grp == "loader"
+                || grp == "core"
+                || m.files.iter().any(|f| {
+                    let fl = f.to_lowercase();
+                    fl.ends_with("dinput8.dll") || fl.ends_with("version.dll") || fl.ends_with("dxgi.dll") || fl.ends_with("winmm.dll")
+                })
+            {
+                return 10;
+            }
+            // Tier 20: Core Frameworks, Address Libraries, Script Compilers
+            if n.contains("archivexl")
+                || n.contains("tweakxl")
+                || n.contains("codeware")
+                || n.contains("redscript")
+                || n.contains("cyber engine tweaks")
+                || n.contains("cet")
+                || n.contains("address library")
+                || n.contains("skyui")
+                || n.contains("mod configuration menu")
+                || n.contains("mcm")
+                || grp == "framework"
+                || grp == "library"
+            {
+                return 20;
+            }
+            // Tier 30: Gameplay, Logic, Scripts, Tweaks
+            if grp == "gameplay"
+                || grp == "scripts"
+                || m.files.iter().any(|f| {
+                    let fl = f.to_lowercase();
+                    fl.ends_with(".reds") || fl.ends_with(".lua") || fl.ends_with(".asi") || fl.starts_with("scripts/")
+                })
+            {
+                return 30;
+            }
+            // Tier 70: Visual, Textures, Meshes, Sounds
+            if grp == "visual"
+                || grp == "textures"
+                || grp == "audio"
+                || m.files.iter().any(|f| {
+                    let fl = f.to_lowercase();
+                    fl.ends_with(".pak") || fl.ends_with(".archive") || fl.ends_with(".ba2") || fl.ends_with(".dds")
+                })
+            {
+                return 70;
+            }
+            // Tier 90: UI Overrides, HUD, Patches, Translations (load late to win conflicts)
+            if n.contains("patch")
+                || n.contains("fix")
+                || n.contains("translation")
+                || n.contains("override")
+                || n.contains("ui")
+                || n.contains("hud")
+                || grp == "ui"
+                || grp == "patch"
+            {
+                return 90;
+            }
+            // Tier 50: General / Default Mods
+            50
+        }
+
+        lf.mods.sort_by_key(tier_score);
+
+        // Topological / dependency resolution pass:
+        // If mod A depends on mod B, ensure B is positioned before A
+        for _ in 0..lf.mods.len() {
+            let mut swapped = false;
+            for i in 0..lf.mods.len() {
+                let deps = lf.mods[i].depends_on.clone();
+                for dep in deps {
+                    let dep_lower = dep.to_lowercase();
+                    if let Some(dep_pos) = lf.mods.iter().skip(i + 1).position(|m| {
+                        m.name.to_lowercase().contains(&dep_lower) || m.id.to_lowercase().contains(&dep_lower)
+                    }) {
+                        let actual_dep_idx = i + 1 + dep_pos;
+                        let dep_mod = lf.mods.remove(actual_dep_idx);
+                        lf.mods.insert(i, dep_mod);
+                        swapped = true;
+                        break;
+                    }
+                }
+                if swapped {
+                    break;
+                }
+            }
+            if !swapped {
+                break;
+            }
+        }
+
+        lf.dirty = true;
+        self.save(&lf)?;
+        Ok(total)
     }
 
     /// Give several mods the same group label ("" removes it).
@@ -4071,5 +4202,23 @@ mod tests {
         let mods = lib.mods();
         assert_eq!(mods[0].name, "Total Overhaul Base");
         assert_eq!(mods[1].name, "Balance Compatibility Patch");
+    }
+
+    #[test]
+    fn optimize_load_order_sequences_loaders_frameworks_and_patches_correctly() {
+        let (d, _g, lib) = setup("opt-order");
+        lib.add_from_dir(&stage(&d, "patch", &[("Data/ui.xml", "UI Patch")]), "My Custom UI Patch", "p.zip").unwrap();
+        lib.add_from_dir(&stage(&d, "tex", &[("Data/tex.dds", "DDS")]), "4K High Res Textures", "t.zip").unwrap();
+        lib.add_from_dir(&stage(&d, "loader", &[("dinput8.dll", "MZ")]), "REFramework Core", "l.zip").unwrap();
+        lib.add_from_dir(&stage(&d, "frame", &[("scripts/lib.lua", "lua")]), "Address Library Framework", "f.zip").unwrap();
+
+        let count = lib.optimize_load_order().unwrap();
+        assert_eq!(count, 4);
+
+        let mods = lib.mods();
+        assert_eq!(mods[0].name, "REFramework Core"); // Tier 10
+        assert_eq!(mods[1].name, "Address Library Framework"); // Tier 20
+        assert_eq!(mods[2].name, "4K High Res Textures"); // Tier 70
+        assert_eq!(mods[3].name, "My Custom UI Patch"); // Tier 90
     }
 }

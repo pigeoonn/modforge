@@ -38,10 +38,24 @@ pub fn grade(score: u32) -> &'static str {
     }
 }
 
-/// The part of the health answer the game page needs: `{ score, grade }`.
+/// The part of the health answer the game page needs: `{ score, grade, breakdown }`.
 pub fn summary(issues: &[Value], updates: usize) -> Value {
     let s = score(issues, updates);
-    json!({ "score": s, "grade": grade(s) })
+    let bad_count = issues.iter().filter(|i| i["level"].as_str() == Some("bad")).count();
+    let warn_count = issues.iter().filter(|i| i["level"].as_str() == Some("warn")).count();
+    let info_count = issues.iter().filter(|i| i["level"].as_str() == Some("info")).count();
+    json!({
+        "score": s,
+        "grade": grade(s),
+        "breakdown": {
+            "issues_count": issues.len(),
+            "bad_count": bad_count,
+            "warn_count": warn_count,
+            "info_count": info_count,
+            "updates_pending": updates,
+            "clean": s >= 90 && bad_count == 0
+        }
+    })
 }
 
 #[cfg(test)]
@@ -79,5 +93,22 @@ mod tests {
         assert_eq!(grade(75), "good");
         assert_eq!(grade(50), "attention");
         assert_eq!(grade(10), "broken");
+    }
+
+    #[test]
+    fn summary_includes_detailed_breakdown() {
+        let issues = vec![i("bad", "crash"), i("warn", "conflict"), i("info", "note")];
+        let sum = summary(&issues, 2);
+        assert_eq!(sum["grade"], "attention");
+        let b = &sum["breakdown"];
+        assert_eq!(b["issues_count"], 3);
+        assert_eq!(b["bad_count"], 1);
+        assert_eq!(b["warn_count"], 1);
+        assert_eq!(b["info_count"], 1);
+        assert_eq!(b["updates_pending"], 2);
+        assert_eq!(b["clean"], false);
+
+        let clean_sum = summary(&[], 0);
+        assert_eq!(clean_sum["breakdown"]["clean"], true);
     }
 }

@@ -46,6 +46,21 @@ impl Notes {
         self.list.clear();
     }
 
+    /// Clear all notes belonging to a specific `appid`.
+    pub fn clear_for_game(&mut self, appid: &str) {
+        self.list.retain(|n| n.appid != appid);
+    }
+
+    /// Notes for a specific `appid`, newest first.
+    pub fn for_game(&self, appid: &str) -> Vec<&Note> {
+        self.list.iter().rev().filter(|n| n.appid == appid).collect()
+    }
+
+    /// Count of unread notes for a specific `appid`.
+    pub fn unread_count_for_game(&self, appid: &str) -> usize {
+        self.list.iter().filter(|n| n.appid == appid && !n.read).count()
+    }
+
     /// Newest first, with the number not read yet.
     pub fn json(&self) -> Value {
         json!({ "unread": self.list.iter().filter(|n| !n.read).count(), "items": self.list.iter().rev().collect::<Vec<_>>() })
@@ -76,5 +91,22 @@ mod tests {
         assert_eq!(n.json()["items"].as_array().unwrap().len(), KEEP, "only the newest are kept");
         n.clear();
         assert!(n.json()["items"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn per_game_notes_can_be_queried_counted_and_cleared() {
+        let mut n = Notes::default();
+        n.add(1000, "crash", "Cyberpunk crash", "1091500");
+        n.add(2000, "updates", "Witcher updates", "292030");
+        n.add(3000, "download", "Cyberpunk mod done", "1091500");
+
+        assert_eq!(n.for_game("1091500").len(), 2);
+        assert_eq!(n.unread_count_for_game("1091500"), 2);
+        assert_eq!(n.unread_count_for_game("292030"), 1);
+
+        n.clear_for_game("1091500");
+        assert_eq!(n.for_game("1091500").len(), 0);
+        assert_eq!(n.unread_count_for_game("1091500"), 0);
+        assert_eq!(n.for_game("292030").len(), 1);
     }
 }

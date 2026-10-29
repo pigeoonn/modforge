@@ -1,13 +1,13 @@
-PackageIdentifier: pigeoonn.Gantry
+PackageIdentifier: pigeoonn.ModForge
 PackageVersion: 5.4.0
 InstallerType: zip
 NestedInstallerType: portable
 NestedInstallerFiles:
-  - RelativeFilePath: gantry-v5.4.0-windows-x86_64\rig.exe
-    PortableCommandAlias: rig
+  - RelativeFilePath: modforge-v5.4.0-windows-x86_64\modforge.exe
+    PortableCommandAlias: modforge
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/pigeoonn/gantry/releases/download/v5.4.0/gantry-v5.4.0-windows-x86_64.zip
+    InstallerUrl: https://github.com/pigeoonn/modforge/releases/download/v5.4.0/modforge-v5.4.0-windows-x86_64.zip
     InstallerSha256: 39EA5E6364471C49610A6B87438139DFC3B9122F7C56E81AD3D5499363113F24
 ManifestType: installer
 ManifestVersion: 1.6.0

@@ -14,7 +14,19 @@ fn norm(s: &str) -> String {
 /// The name without trademark signs and edition words ("Grand Theft Auto IV: The Complete Edition").
 pub fn simplified(name: &str) -> String {
     let mut n = name.replace(['™', '®', '©'], "");
-    for sep in [": The Complete Edition", " - Complete Edition", " Complete Edition", ": Definitive Edition", " Definitive Edition", " Limited Edition", " Deluxe Edition", " Game of the Year Edition", " GOTY Edition", " Remastered"] {
+    for sep in [
+        ": The Complete Edition", " - Complete Edition", " Complete Edition",
+        ": Definitive Edition", " - Definitive Edition", " Definitive Edition",
+        ": Director's Cut", " - Director's Cut", " Director's Cut",
+        ": Enhanced Edition", " - Enhanced Edition", " Enhanced Edition",
+        ": Anniversary Edition", " - Anniversary Edition", " Anniversary Edition",
+        ": Limited Edition", " Limited Edition",
+        ": Deluxe Edition", " - Deluxe Edition", " Deluxe Edition",
+        ": Digital Deluxe Edition", " Digital Deluxe Edition",
+        ": Game of the Year Edition", " - Game of the Year Edition", " Game of the Year Edition",
+        ": GOTY Edition", " - GOTY Edition", " GOTY Edition",
+        ": Remastered", " - Remastered", " Remastered",
+    ] {
         // ASCII-only lower-casing keeps every byte offset, so the cut always falls on a character boundary
         if let Some(i) = n.to_ascii_lowercase().find(&sep.to_ascii_lowercase()) {
             n.truncate(i);
@@ -79,7 +91,9 @@ mod tests {
         assert_eq!(simplified("Need for Speed™ Most Wanted"), "Need for Speed Most Wanted");
         assert_eq!(simplified("Grand Theft Auto IV: The Complete Edition"), "Grand Theft Auto IV");
         assert_eq!(simplified("Mafia III: Definitive Edition"), "Mafia III");
-        assert_eq!(simplified("Max Payne 3"), "Max Payne 3");
+        assert_eq!(simplified("Death Stranding: Director's Cut"), "Death Stranding");
+        assert_eq!(simplified("Baldur's Gate: Enhanced Edition"), "Baldur's Gate");
+        assert_eq!(simplified("The Elder Scrolls V: Skyrim - Anniversary Edition"), "The Elder Scrolls V: Skyrim");
         // letters whose lower case is longer or shorter in bytes must not shift the cut into the middle of a character
         assert_eq!(simplified("İstanbul Savaşı Definitive Edition"), "İstanbul Savaşı");
         assert_eq!(simplified("ẞ Game: The Complete Edition"), "ẞ Game");

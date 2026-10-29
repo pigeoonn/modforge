@@ -144,6 +144,10 @@ impl GameEntry {
                     self.engine = if s.is_goldsrc { "GoldSrc".into() } else { "Source Engine".into() };
                 } else if crate::loaders::detect_godot(p).is_some() {
                     self.engine = "Godot".into();
+                } else if let Some(re) = crate::loaders::detect_re_engine(p) {
+                    self.engine = format!("RE Engine ({})", re.game);
+                } else if crate::loaders::detect_witcher3(p).is_some() {
+                    self.engine = "REDengine 3 (The Witcher 3)".into();
                 }
             }
             self.loader = if self.engine == "Unity" {
@@ -154,6 +158,10 @@ impl GameEntry {
                 crate::loaders::detect_source(p).map(|s| if s.loader.is_empty() { "none".to_string() } else { s.loader }).unwrap_or_default()
             } else if self.engine == "Godot" {
                 crate::loaders::detect_godot(p).map(|g| if g.loader.is_empty() { "none".to_string() } else { g.loader }).unwrap_or_default()
+            } else if self.engine.starts_with("RE Engine") {
+                crate::loaders::detect_re_engine(p).map(|r| if r.loader.is_empty() { "none".to_string() } else { r.loader }).unwrap_or_default()
+            } else if self.engine.starts_with("REDengine 3") {
+                crate::loaders::detect_witcher3(p).map(|w| if w.has_mods_dir { "mods".to_string() } else { "none".to_string() }).unwrap_or_default()
             } else {
                 String::new()
             };
@@ -639,6 +647,10 @@ impl RigEngine {
             engine = if s.is_goldsrc { "GoldSrc".to_string() } else { "Source Engine".to_string() };
         } else if crate::loaders::detect_godot(&game_dir).is_some() {
             engine = "Godot".to_string();
+        } else if let Some(re) = crate::loaders::detect_re_engine(&game_dir) {
+            engine = format!("RE Engine ({})", re.game);
+        } else if crate::loaders::detect_witcher3(&game_dir).is_some() {
+            engine = "REDengine 3 (The Witcher 3)".to_string();
         }
 
         let stem = exe_path.file_stem()?.to_string_lossy().to_string();
@@ -751,6 +763,10 @@ impl RigEngine {
                     engine = if s.is_goldsrc { "GoldSrc".to_string() } else { "Source Engine".to_string() };
                 } else if crate::loaders::detect_godot(&gdir).is_some() {
                     engine = "Godot".to_string();
+                } else if let Some(re) = crate::loaders::detect_re_engine(&gdir) {
+                    engine = format!("RE Engine ({})", re.game);
+                } else if crate::loaders::detect_witcher3(&gdir).is_some() {
+                    engine = "REDengine 3 (The Witcher 3)".to_string();
                 }
             }
 
@@ -784,7 +800,7 @@ impl RigEngine {
                     trainer_name,
                     mod_count: 0, source: String::new(), proton_path: String::new(), ue4ss: false, loader: String::new(), cover_id: String::new(),
             };
-            if is_installed && (entry.engine.starts_with("Unreal") || entry.engine == "Unity" || entry.engine.starts_with("Bethesda") || entry.engine == "Godot" || entry.engine == "Source Engine" || entry.engine == "GoldSrc") {
+            if is_installed && (entry.engine.starts_with("Unreal") || entry.engine == "Unity" || entry.engine.starts_with("Bethesda") || entry.engine == "Godot" || entry.engine == "Source Engine" || entry.engine == "GoldSrc" || entry.engine.starts_with("RE Engine") || entry.engine.starts_with("REDengine 3")) {
                 entry.mod_count = ModManager::list_mods(&entry).len();
                 entry.refresh_flags();
             }
@@ -821,6 +837,10 @@ impl RigEngine {
                             cg.engine = if s.is_goldsrc { "GoldSrc".to_string() } else { "Source Engine".to_string() };
                         } else if crate::loaders::detect_godot(&gpath).is_some() {
                             cg.engine = "Godot".to_string();
+                        } else if let Some(re) = crate::loaders::detect_re_engine(&gpath) {
+                            cg.engine = format!("RE Engine ({})", re.game);
+                        } else if crate::loaders::detect_witcher3(&gpath).is_some() {
+                            cg.engine = "REDengine 3 (The Witcher 3)".to_string();
                         }
                     }
                     if let Some(lopts) = cfg.launch_options.get(&cg.appid) {
@@ -1220,5 +1240,73 @@ mod tests {
         s_entry.refresh_flags();
         assert_eq!(s_entry.engine, "Source Engine");
         assert_eq!(s_entry.loader, "sourcemod");
+
+        // RE Engine (Resident Evil 4 with REFramework)
+        let re_dir = d.join("RE4Game");
+        fs::create_dir_all(&re_dir).unwrap();
+        fs::write(re_dir.join("re4.exe"), b"MZ").unwrap();
+        fs::write(re_dir.join("dinput8.dll"), b"MZ").unwrap();
+
+        let mut re_entry = GameEntry {
+            appid: "re_1".into(),
+            name: "Resident Evil 4".into(),
+            game_dir: re_dir.to_string_lossy().into(),
+            exe_path: String::new(),
+            shipping_exe: String::new(),
+            bin_dir: String::new(),
+            engine: default_engine(),
+            compatdata: String::new(),
+            pfx: String::new(),
+            has_pfx: false,
+            is_custom: true,
+            is_installed: true,
+            steam_appid: String::new(),
+            launch_args: String::new(),
+            env_vars: String::new(),
+            trainer_name: String::new(),
+            mod_count: 0,
+            source: String::new(),
+            proton_path: String::new(),
+            ue4ss: false,
+            loader: String::new(),
+            cover_id: String::new(),
+        };
+        re_entry.refresh_flags();
+        assert_eq!(re_entry.engine, "RE Engine (Resident Evil 4)");
+        assert_eq!(re_entry.loader, "reframework");
+
+        // Witcher 3
+        let w3_dir = d.join("Witcher3Game");
+        fs::create_dir_all(w3_dir.join("bin/x64")).unwrap();
+        fs::create_dir_all(w3_dir.join("mods")).unwrap();
+        fs::write(w3_dir.join("bin/x64/witcher3.exe"), b"MZ").unwrap();
+
+        let mut w3_entry = GameEntry {
+            appid: "w3_1".into(),
+            name: "The Witcher 3".into(),
+            game_dir: w3_dir.to_string_lossy().into(),
+            exe_path: String::new(),
+            shipping_exe: String::new(),
+            bin_dir: String::new(),
+            engine: default_engine(),
+            compatdata: String::new(),
+            pfx: String::new(),
+            has_pfx: false,
+            is_custom: true,
+            is_installed: true,
+            steam_appid: String::new(),
+            launch_args: String::new(),
+            env_vars: String::new(),
+            trainer_name: String::new(),
+            mod_count: 0,
+            source: String::new(),
+            proton_path: String::new(),
+            ue4ss: false,
+            loader: String::new(),
+            cover_id: String::new(),
+        };
+        w3_entry.refresh_flags();
+        assert_eq!(w3_entry.engine, "REDengine 3 (The Witcher 3)");
+        assert_eq!(w3_entry.loader, "mods");
     }
 }

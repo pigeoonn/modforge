@@ -1200,19 +1200,29 @@ fn shots_for(state: &SharedState, g: &GameEntry) -> Vec<screenshots::Shot> {
         let st = read_state(state);
         (st.steam_lib.roots.clone().unwrap_or_else(RigPaths::steam_roots), st.paths.config_file.with_file_name("sessions.jsonl"))
     };
-    let id = g.steam_id();
-    if id.is_empty() {
-        return Vec::new();
-    }
     let sessions: Vec<stats::Session> = stats::read(&sessions_file).into_iter().filter(|s| s.appid == g.appid).collect();
-    screenshots::list(&roots, id, &sessions)
+    let mut extra_dirs = Vec::new();
+    if !g.game_dir.is_empty() {
+        let gd = Path::new(&g.game_dir);
+        for sub in ["Screenshots", "screenshots", "ScreenShots", "Captures", "photos"] {
+            let p = gd.join(sub);
+            if p.is_dir() {
+                extra_dirs.push(p);
+            }
+        }
+    }
+    if !g.pfx.is_empty() {
+        let pfx = Path::new(&g.pfx);
+        let pic = pfx.join("drive_c/users/steamuser/Pictures/Screenshots");
+        if pic.is_dir() {
+            extra_dirs.push(pic);
+        }
+    }
+    screenshots::list_with_dirs(&roots, g.steam_id(), &sessions, &extra_dirs)
 }
 
 /// How many screenshots the game has (looked up at most every 30 seconds).
 fn screenshot_count(g: &GameEntry) -> usize {
-    if g.steam_id().is_empty() {
-        return 0;
-    }
     static CACHE: std::sync::LazyLock<Mutex<std::collections::HashMap<String, (Instant, usize)>>> = std::sync::LazyLock::new(|| Mutex::new(std::collections::HashMap::new()));
     let key = format!("{}|{}", g.steam_id(), g.game_dir);
     if let Some((at, n)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&key) {
@@ -1220,7 +1230,17 @@ fn screenshot_count(g: &GameEntry) -> usize {
             return *n;
         }
     }
-    let n = screenshots::list(&RigPaths::steam_roots(), g.steam_id(), &[]).len();
+    let mut extra_dirs = Vec::new();
+    if !g.game_dir.is_empty() {
+        let gd = Path::new(&g.game_dir);
+        for sub in ["Screenshots", "screenshots", "ScreenShots", "Captures", "photos"] {
+            let p = gd.join(sub);
+            if p.is_dir() {
+                extra_dirs.push(p);
+            }
+        }
+    }
+    let n = screenshots::list_with_dirs(&RigPaths::steam_roots(), g.steam_id(), &[], &extra_dirs).len();
     CACHE.lock().unwrap_or_else(|e| e.into_inner()).insert(key, (Instant::now(), n));
     n
 }
@@ -4791,6 +4811,13 @@ fn launch_native_app_window(url: &str, profile_dir: &Path) {
 
 // ───────────────────────────── HTTP layer ─────────────────────────────
 
+pub fn get_local_ip() -> Option<String> {
+    use std::net::UdpSocket;
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    socket.local_addr().ok().map(|addr| addr.ip().to_string())
+}
+
 pub struct ServerCtx {
     /// Identifies this exact binary so a newer launch can tell it apart from an older instance.
     pub build: String,
@@ -4801,7 +4828,13 @@ pub struct ServerCtx {
 
 impl ServerCtx {
     pub fn new(port: u16, token: String, build: String) -> Self {
-        let hosts: Vec<String> = ["127.0.0.1", "localhost"].iter().map(|h| format!("{}:{}", h, port)).collect();
+        let mut host_list = vec!["127.0.0.1".to_string(), "localhost".to_string()];
+        if let Some(lip) = get_local_ip() {
+            if !host_list.contains(&lip) {
+                host_list.push(lip);
+            }
+        }
+        let hosts: Vec<String> = host_list.iter().map(|h| format!("{}:{}", h, port)).collect();
         let origins = hosts.iter().map(|h| format!("http://{}", h)).collect();
         Self { build, token, hosts, origins }
     }
@@ -4840,7 +4873,10 @@ fn host_and_origin_ok(req: &Request, ctx: &ServerCtx) -> bool {
 }
 
 fn token_ok(req: &Request, query: &str, ctx: &ServerCtx) -> bool {
-    let presented = header_value(req, "X-Rig-Token").or_else(|| query_param(query, "t")).unwrap_or_default();
+    let presented = header_value(req, "X-Rig-Token")
+        .or_else(|| query_param(query, "t"))
+        .or_else(|| query_param(query, "token"))
+        .unwrap_or_default();
     constant_time_eq(&presented, &ctx.token)
 }
 
@@ -4915,6 +4951,17 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
             return respond_state(req, &state);
         }
         "/api/state" => return respond_state(req, &state),
+        "/api/lan_info" => {
+            let port = server_port();
+            let ip = get_local_ip().unwrap_or_else(|| "127.0.0.1".to_string());
+            let url = format!("http://{}:{}", ip, port);
+            return respond_json(req, 200, json!({
+                "ip": ip,
+                "port": port,
+                "url": url,
+                "token": ctx.token
+            }).to_string());
+        }
         "/api/drop_upload" => return handle_drop_upload(req, &query, &state),
         "/api/doctor" => {
             let game = selected_game(&state);
@@ -5347,11 +5394,155 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
         _ => {}
     }
 
-    let mut body_str = String::new();
-    let _ = req.as_reader().take(MAX_JSON_BODY).read_to_string(&mut body_str);
-    let body: Value = serde_json::from_str(&body_str).unwrap_or_else(|_| json!({}));
+    let mut raw_body = String::new();
+    let _ = req.as_reader().take(MAX_JSON_BODY).read_to_string(&mut raw_body);
+    let body: Value = serde_json::from_str(&raw_body).unwrap_or_else(|_| json!({}));
+
+    if path == "/api/mod_configs" {
+        let mod_id = body_str(&body, "id");
+        let (game, lib_mod, staged_dir) = {
+            let st = read_state(&state);
+            let g = st.games.get(st.selected_idx).cloned();
+            let lib = g.as_ref().and_then(library_of);
+            let lm = lib.as_ref().and_then(|l| l.mods().into_iter().find(|m| m.id == mod_id));
+            let sdir = lib.as_ref().map(|l| l.mod_files_dir(&mod_id));
+            (g, lm, sdir)
+        };
+
+        if let (Some(_g), Some(m), Some(dir)) = (game, lib_mod, staged_dir) {
+            let mut files = Vec::new();
+            if dir.is_dir() {
+                for entry in WalkDir::new(&dir).max_depth(8).into_iter().flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        if matches!(ext.as_str(), "ini" | "cfg" | "toml" | "json" | "yaml" | "yml" | "txt" | "lua" | "reds" | "xml" | "config") {
+                            if let Ok(rel) = path.strip_prefix(&dir) {
+                                let rel_s = rel.to_string_lossy().replace('\\', "/");
+                                let size = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+                                if size < 1024 * 1024 {
+                                    files.push(json!({
+                                        "path": rel_s,
+                                        "size": size,
+                                        "ext": ext
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return respond_json(req, 200, json!({
+                "mod_name": m.name,
+                "mod_id": m.id,
+                "files": files
+            }).to_string());
+        }
+
+        if let Some((_, m)) = find_mod(&state, &body) {
+            let mut files = Vec::new();
+            if let Some(cfg) = ModManager::find_mod_config_file(&m) {
+                if let Some(fname) = cfg.file_name() {
+                    files.push(json!({
+                        "path": fname.to_string_lossy(),
+                        "size": cfg.metadata().map(|meta| meta.len()).unwrap_or(0),
+                        "ext": cfg.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase()
+                    }));
+                }
+            }
+            return respond_json(req, 200, json!({
+                "mod_name": m.name,
+                "mod_id": m.id,
+                "files": files
+            }).to_string());
+        }
+
+        return respond_json(req, 404, json!({ "error": "Mod not found." }).to_string());
+    }
+
+    if path == "/api/mod_config_read" {
+        let mod_id = body_str(&body, "id");
+        let file_rel = body_str(&body, "file");
+        if file_rel.contains("..") {
+            return respond_json(req, 400, json!({ "error": "Invalid file path." }).to_string());
+        }
+
+        let (game, lib_mod, staged_dir) = {
+            let st = read_state(&state);
+            let g = st.games.get(st.selected_idx).cloned();
+            let lib = g.as_ref().and_then(library_of);
+            let lm = lib.as_ref().and_then(|l| l.mods().into_iter().find(|m| m.id == mod_id));
+            let sdir = lib.as_ref().map(|l| l.mod_files_dir(&mod_id));
+            (g, lm, sdir)
+        };
+
+        if let (Some(_g), Some(m), Some(dir)) = (game, lib_mod, staged_dir) {
+            let target_path = dir.join(&file_rel);
+            if target_path.starts_with(&dir) && target_path.is_file() {
+                if let Ok(content) = fs::read_to_string(&target_path) {
+                    return respond_json(req, 200, json!({
+                        "mod_name": m.name,
+                        "mod_id": m.id,
+                        "file": file_rel,
+                        "content": content
+                    }).to_string());
+                }
+            }
+        }
+
+        if let Some((_, m)) = find_mod(&state, &body) {
+            if let Some(cfg) = ModManager::find_mod_config_file(&m) {
+                if let Ok(content) = fs::read_to_string(&cfg) {
+                    return respond_json(req, 200, json!({
+                        "mod_name": m.name,
+                        "mod_id": m.id,
+                        "file": cfg.file_name().unwrap_or_default().to_string_lossy(),
+                        "content": content
+                    }).to_string());
+                }
+            }
+        }
+
+        return respond_json(req, 404, json!({ "error": "Could not read config file." }).to_string());
+    }
 
     if path == "/api/mod_config_get" {
+        let mod_id = body_str(&body, "id");
+        let (game, lib_mod, staged_dir) = {
+            let st = read_state(&state);
+            let g = st.games.get(st.selected_idx).cloned();
+            let lib = g.as_ref().and_then(library_of);
+            let lm = lib.as_ref().and_then(|l| l.mods().into_iter().find(|m| m.id == mod_id));
+            let sdir = lib.as_ref().map(|l| l.mod_files_dir(&mod_id));
+            (g, lm, sdir)
+        };
+
+        if let (Some(_g), Some(m), Some(dir)) = (game, lib_mod, staged_dir) {
+            let mut cfg_path = None;
+            if dir.is_dir() {
+                for entry in WalkDir::new(&dir).max_depth(8).into_iter().flatten() {
+                    let p = entry.path();
+                    if p.is_file() {
+                        let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        if matches!(ext.as_str(), "ini" | "cfg" | "toml" | "json" | "yaml" | "yml" | "txt" | "lua" | "reds" | "xml" | "config") {
+                            cfg_path = Some(p.to_path_buf());
+                            break;
+                        }
+                    }
+                }
+            }
+            if let Some(p) = cfg_path {
+                if let Ok(content) = fs::read_to_string(&p) {
+                    let fname = p.strip_prefix(&dir).map(|r| r.to_string_lossy().to_string()).unwrap_or_else(|_| p.file_name().unwrap_or_default().to_string_lossy().to_string());
+                    return respond_json(req, 200, json!({
+                        "mod_name": m.name,
+                        "file_name": fname,
+                        "content": content
+                    }).to_string());
+                }
+            }
+        }
+
         let payload = find_mod(&state, &body)
             .and_then(|(_, m)| {
                 let cfg_p = ModManager::find_mod_config_file(&m)?;
@@ -5936,10 +6127,60 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             }
         }
         "/api/mod_config_save" => {
+            let id = body_str(body, "id");
+            let file_rel = body_str(body, "file");
             let content = body.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+            if file_rel.contains("..") {
+                log(state, "ERR", "Invalid config file path.");
+                return true;
+            }
+
+            let (game, lib_mod, staged_dir) = {
+                let st = read_state(state);
+                let g = st.games.get(st.selected_idx).cloned();
+                let lib = g.as_ref().and_then(library_of);
+                let lm = lib.as_ref().and_then(|l| l.mods().into_iter().find(|m| m.id == id));
+                let sdir = lib.as_ref().map(|l| l.mod_files_dir(&id));
+                (g, lm, sdir)
+            };
+
+            if let (Some(g), Some(m), Some(dir)) = (game, lib_mod, staged_dir) {
+                let file_path = if !file_rel.is_empty() {
+                    dir.join(&file_rel)
+                } else {
+                    dir.join("config.ini")
+                };
+
+                if file_path.starts_with(&dir) {
+                    let bak = file_path.with_extension(format!("{}.bak", file_path.extension().and_then(|e| e.to_str()).unwrap_or("cfg")));
+                    if file_path.is_file() && !bak.is_file() {
+                        let _ = fs::copy(&file_path, &bak);
+                    }
+                    match atomic_write(&file_path, &content) {
+                        Ok(()) => {
+                            let fname = file_path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            log(state, "OK", format!("Saved config for '{}' ({}).", m.name, fname));
+                            if m.enabled {
+                                let deployed_dest = if m.target.is_empty() {
+                                    PathBuf::from(&g.game_dir).join(&file_rel)
+                                } else {
+                                    PathBuf::from(&g.game_dir).join(&m.target).join(&file_rel)
+                                };
+                                if deployed_dest.exists() {
+                                    let _ = atomic_write(&deployed_dest, &content);
+                                }
+                            }
+                        }
+                        Err(e) => log(state, "ERR", format!("Could not save config for '{}': {}", m.name, e)),
+                    }
+                    return true;
+                }
+            }
+
             match find_mod(state, body) {
                 Some((_, m)) => match ModManager::find_mod_config_file(&m) {
-                    Some(cfg_p) => match atomic_write(&cfg_p, content) {
+                    Some(cfg_p) => match atomic_write(&cfg_p, &content) {
                         Ok(()) => {
                             let fname = cfg_p.file_name().unwrap_or_default().to_string_lossy().to_string();
                             log(state, "OK", format!("Saved config for '{}' ({}).", m.name, fname));
@@ -6297,6 +6538,15 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                     }
                 }
                 log(st, "OK", if to_top { "Moved selected mods to top of load order." } else { "Moved selected mods to bottom of load order." });
+                library_apply(st, lib, false)
+            });
+        }
+        "/api/optimize_load_order" => {
+            library_task(state, move |st, lib, _| {
+                match lib.optimize_load_order() {
+                    Ok(n) => log(st, "OK", format!("Auto-sorted load order for {} mods.", n)),
+                    Err(e) => log(st, "ERR", format!("Failed to auto-sort load order: {}", e)),
+                }
                 library_apply(st, lib, false)
             });
         }
@@ -11408,7 +11658,12 @@ fn terminate_other_instances() {
 /// Bind the port. If a healthy instance of the *same build* already owns it, just open a
 /// window onto it and exit; if it is older, hung or foreign-but-rig, replace it.
 fn bind_or_reuse(port: u16, build: &str, profile_dir: &Path, nxm: Option<&str>) -> Server {
-    let addr = format!("127.0.0.1:{}", port);
+    let host = if std::env::var_os("MODFORGE_LAN").is_some() || std::env::var_os("RIG_LAN").is_some() {
+        "0.0.0.0"
+    } else {
+        "127.0.0.1"
+    };
+    let addr = format!("{}:{}", host, port);
     if let Ok(srv) = Server::http(&addr) {
         return srv;
     }
@@ -11444,7 +11699,7 @@ pub fn serve(server: Server, state: SharedState, notifier: Arc<EventNotifier>, c
     }
 }
 
-const USAGE: &str = "ModForge - Universal Game & Mod Studio\n\nUSAGE:\n  modforge              start ModForge (or connect to running instance)\n  modforge --play GAME [--vanilla | --profile NAME]   start a game (id or name) with its mods, without a window\n  modforge --doctor     print the state of every installed game (diagnostics & mod health)\n  modforge --deck       full-screen controller mode (Steam Deck / couch)\n  modforge nxm://...    handle Nexus Mods 1-click download\n  modforge --install    add menu entry, icon and ~/.local/bin/modforge for this binary\n  modforge --register-nxm / --unregister-nxm   take over / give back nxm:// links\n  modforge --uninstall  remove what --install created\n  modforge --version    print the version\n  modforge --help       this text\n";
+const USAGE: &str = "ModForge - Universal Game & Mod Studio\n\nUSAGE:\n  modforge              start ModForge (or connect to running instance)\n  modforge --play GAME [--vanilla | --profile NAME]   start a game (id or name) with its mods, without a window\n  modforge --doctor     print the state of every installed game (diagnostics & mod health)\n  modforge --deck       full-screen controller mode (Steam Deck / couch)\n  modforge --lan        allow connections from local network (Steam Deck / phone)\n  modforge nxm://...    handle Nexus Mods 1-click download\n  modforge --install    add menu entry, icon and ~/.local/bin/modforge for this binary\n  modforge --register-nxm / --unregister-nxm   take over / give back nxm:// links\n  modforge --uninstall  remove what --install created\n  modforge --version    print the version\n  modforge --help       this text\n";
 
 // ───────────────────────────── rig --play ─────────────────────────────
 
@@ -11755,6 +12010,10 @@ fn handle_cli(args: Vec<String>) -> Option<i32> {
         // couch mode: full screen, big controls, the gamepad drives everything (the app then starts as usual)
         Some("--deck") => {
             std::env::set_var("RIG_DECK", "1");
+            None
+        }
+        Some("--lan") => {
+            std::env::set_var("MODFORGE_LAN", "1");
             None
         }
         Some("--version") | Some("-V") => {
@@ -18269,6 +18528,55 @@ mod tests {
         wait_until("conflicts auto resolved", || {
             let m = lib.mods();
             m.len() == 2 && m[0].name == "Base Overhaul" && m[1].name == "Compatibility Patch"
+        });
+    }
+
+    #[test]
+    fn lan_info_and_mod_config_and_optimize_endpoints_work() {
+        let h = harness("lan_cfg_opt");
+        let (code, text) = http(&h, "GET", "/api/lan_info", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(code, 200);
+        let lan: Value = serde_json::from_str(&text).unwrap();
+        assert!(lan["url"].as_str().unwrap().starts_with("http://"));
+        assert_eq!(lan["token"].as_str().unwrap(), h.token);
+
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+
+        let s1 = h._dir.join("test-ui-patch");
+        fs::create_dir_all(s1.join("config")).unwrap();
+        fs::write(s1.join("config/tweaks.ini"), "fov=90").unwrap();
+        let m1 = lib.add_with(&s1, "UI Tweaks Patch", "patch.zip", None, "1.0").unwrap();
+
+        let s2 = h._dir.join("test-loader");
+        fs::create_dir_all(&s2).unwrap();
+        fs::write(s2.join("dinput8.dll"), "MZ").unwrap();
+        let _m2 = lib.add_with(&s2, "REFramework Loader", "loader.zip", None, "1.0").unwrap();
+        refresh_mods_shared(&h.state);
+
+        // Test /api/mod_configs
+        let expected_path = m1.files[0].clone();
+        let res_cfgs = api(&h, "/api/mod_configs", json!({ "id": m1.id }));
+        assert_eq!(res_cfgs["mod_name"], "UI Tweaks Patch");
+        let files = res_cfgs["files"].as_array().unwrap();
+        assert!(files.iter().any(|f| f["path"] == expected_path));
+
+        // Test /api/mod_config_read
+        let res_read = api(&h, "/api/mod_config_read", json!({ "id": m1.id, "file": expected_path }));
+        assert_eq!(res_read["content"], "fov=90");
+
+        // Test /api/mod_config_save
+        api(&h, "/api/mod_config_save", json!({ "id": m1.id, "file": expected_path, "content": "fov=110" }));
+        wait_until("config saved", || {
+            let p = lib.mod_files_dir(&m1.id).join(&expected_path);
+            fs::read_to_string(p).map(|s| s == "fov=110").unwrap_or(false)
+        });
+
+        // Test /api/optimize_load_order
+        api(&h, "/api/optimize_load_order", json!({}));
+        wait_until("order optimized", || {
+            let m = lib.mods();
+            m.len() == 2 && m[0].name == "REFramework Loader" && m[1].name == "UI Tweaks Patch"
         });
     }
 }

@@ -1,5 +1,5 @@
 [Unit]
-Description=Gantry: nightly health report
+Description=ModForge: nightly health report
 
 [Timer]
 OnCalendar=*-*-* 04:30

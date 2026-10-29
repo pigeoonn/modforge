@@ -1,6 +1,0 @@
-[Unit]
-Description=Gantry: nightly health report
-
-[Service]
-Type=oneshot
-ExecStart=%h/.local/share/gantry/gantry-check.sh

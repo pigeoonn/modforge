@@ -49,6 +49,7 @@ pub fn folder_hints(text: &str) -> Vec<String> {
     static PLACEHOLDER: OnceLock<Regex> = OnceLock::new();
     static NAMED: OnceLock<Regex> = OnceLock::new();
     static PATH: OnceLock<Regex> = OnceLock::new();
+    static DIRECT: OnceLock<Regex> = OnceLock::new();
     let placeholder = PLACEHOLDER.get_or_init(|| Regex::new(r"(?:#[^#\n]{1,40}#|<[^>\n]{1,40}>|%[^%\n]{1,40}%|\[[^\]\n]{1,40}\])/([\w.\-~ ]+(?:/[\w.\-~ ]+)*)").expect("regex"));
     let named = NAMED.get_or_init(|| {
         Regex::new(r#"(?i)\b(?:into|to|in|inside|under)\s+(?:the\s+|your\s+)?(?:game(?:'s)?\s+)?[`'"]?([\w.\-~]+(?:/[\w.\-~]+)*)[`'"]?\s+(?:sub-?)?(?:folder|directory|dir)\b"#).expect("regex")
@@ -56,9 +57,12 @@ pub fn folder_hints(text: &str) -> Vec<String> {
     let path = PATH.get_or_init(|| {
         Regex::new(r#"(?i)\b(?:into|to|in|inside|under)\s+(?:the\s+|your\s+)?(?:game(?:'s)?\s+(?:install\s+)?(?:folder|directory|dir|root)?\s*/?\s*)?[`'"]?([\w.\-~]+(?:/[\w.\-~]+)+)/?[`'"]?"#).expect("regex")
     });
+    let direct = DIRECT.get_or_init(|| {
+        Regex::new(r#"(?i)\b(?:extract|unzip|unpack|copy|drop|drag|place|install|put)\s+(?:all\s+|the\s+|files\s+)?(?:to|into|in)\s+[`'"]?([\w.\-~]+(?:/[\w.\-~]+)*)/?[`'"]?"#).expect("regex")
+    });
     let text = plain(text).replace('\\', "/");
     let mut out: Vec<String> = Vec::new();
-    for re in [placeholder, named, path] {
+    for re in [placeholder, named, path, direct] {
         for line in text.lines() {
             for c in re.captures_iter(line) {
                 if let Some(p) = c.get(1).and_then(|m| clean(m.as_str())) {
@@ -90,6 +94,8 @@ mod tests {
         assert_eq!(folder_hints("Place it inside 'Content/Paks/~mods' and start the game"), vec!["Content/Paks/~mods"]);
         assert_eq!(folder_hints("<ul><li>Drop the files into <b>Data/Scripts</b> folder</li></ul>")[0], "Data/Scripts");
         assert_eq!(folder_hints("[b]Install:[/b] unpack to your Binaries/Win64 folder."), vec!["Binaries/Win64"]);
+        assert_eq!(folder_hints("Extract to reframework/autorun"), vec!["reframework/autorun"]);
+        assert_eq!(folder_hints("Install to BepInEx/plugins/"), vec!["BepInEx/plugins"]);
     }
 
     #[test]

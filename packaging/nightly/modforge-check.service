@@ -1,0 +1,6 @@
+[Unit]
+Description=ModForge: nightly health report
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/share/modforge/modforge-check.sh

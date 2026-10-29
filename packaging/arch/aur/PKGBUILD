@@ -1,15 +1,15 @@
 # Maintainer: pigeoonn
-# gantry-git: builds the newest commit of the public repository.
-# Needs the repository to be public. Submit it with:  git clone ssh://aur@aur.archlinux.org/gantry-git.git
-pkgname=gantry-git
-_pkgname=gantry
-pkgver=5.5.0
+# modforge-git: builds the newest commit of the public repository.
+# Needs the repository to be public. Submit it with:  git clone ssh://aur@aur.archlinux.org/modforge-git.git
+pkgname=modforge-git
+_pkgname=modforge
+pkgver=6.0.0
 pkgrel=1
-pkgdesc='Mod, trainer and crash-hunting hub for games on Linux (development version)'
+pkgdesc='Universal Game & Mod Studio for Linux, Steam Deck & PC (development version)'
 arch=('x86_64')
-url='https://github.com/pigeoonn/gantry'
+url='https://github.com/pigeoonn/modforge'
 license=('GPL-3.0-or-later')
-depends=('gcc-libs' 'glibc' 'curl' 'xdg-utils' 'libarchive' 'wayland' 'libxkbcommon')
+depends=('gcc-libs' 'glibc' 'curl' 'xdg-utils' 'libarchive' 'wayland' 'libxkbcommon' 'python' 'python-pyqt6' 'python-requests')
 makedepends=('cargo' 'git')
 optdepends=(
   'p7zip: install .7z and .rar mods'
@@ -18,10 +18,9 @@ optdepends=(
   'mangohud: performance overlay'
   'libnotify: desktop notifications (notify-send)'
   'steam: sync launch options for Steam games'
-  'chromium: app window for the interface (any Chromium based browser works)'
 )
-provides=('gantry')
-conflicts=('gantry')
+provides=('modforge' 'gantry')
+conflicts=('modforge' 'gantry')
 source=("git+$url.git")
 sha256sums=('SKIP')
 
@@ -38,12 +37,13 @@ build() {
 
 package() {
   cd "$_pkgname"
-  install -Dm755 target/release/rig "$pkgdir/usr/bin/rig"
-  install -Dm644 packaging/gantry.desktop "$pkgdir/usr/share/applications/gantry.desktop"
-  install -Dm644 src/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/gantry.png"
-  install -Dm644 src/icon.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/gantry.svg"
+  install -Dm755 target/release/modforge "$pkgdir/usr/bin/modforge-engine"
+  ln -sf /usr/bin/modforge-engine "$pkgdir/usr/bin/rig"
+  install -Dm755 modforge_app.py "$pkgdir/usr/share/modforge/modforge_app.py"
+  install -Dm755 modforge "$pkgdir/usr/bin/modforge"
+  install -Dm644 packaging/modforge.desktop "$pkgdir/usr/share/applications/modforge.desktop"
+  install -Dm644 src/icon.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/modforge.png"
+  install -Dm644 src/icon.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/modforge.svg"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-  install -Dm644 docs/GUIDE.md "$pkgdir/usr/share/doc/$pkgname/GUIDE.md"
-  install -Dm644 docs/TUTORIAL.md "$pkgdir/usr/share/doc/$pkgname/TUTORIAL.md"
 }

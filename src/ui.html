@@ -1072,8 +1072,16 @@
   .du-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
 
   /* M35: controller mode */
-  html.deck :focus { outline: 3px solid var(--acc); outline-offset: 3px; border-radius: 10px; }
-  html.deck .game-card:focus, html.deck .game-item:focus { box-shadow: 0 0 0 3px var(--acc); }
+  html.deck :focus, .gamepad-focused {
+    outline: 3px solid var(--acc, #00f2fe) !important;
+    outline-offset: 3px !important;
+    border-radius: 10px;
+    box-shadow: 0 0 18px rgba(0, 242, 254, 0.45) !important;
+    transition: outline 0.15s ease, box-shadow 0.15s ease;
+  }
+  html.deck .game-card:focus, html.deck .game-item:focus, html.deck .ml-row:focus {
+    box-shadow: 0 0 0 3px var(--acc, #00f2fe), 0 0 20px rgba(0, 242, 254, 0.5) !important;
+  }
   html.deck .btn, html.deck .tab, html.deck .seg-btn { min-height: 44px; }
   html.deck .ml-row { padding: 12px 14px; }
   .deck-hints { position: fixed; left: 0; right: 0; bottom: 0; z-index: 130; display: none; justify-content: center; gap: 22px; padding: 8px 16px; background: rgba(10,12,18,0.92); border-top: 1px solid var(--line-2); font-size: 13px; font-weight: 600; }
@@ -1277,6 +1285,7 @@
     <span class="ml-pill good" id="newVer" style="display:none; cursor:pointer" onclick="openSettings()" data-dyn></span>
     <button class="hbtn dl-btn" id="notesBtn" title="Notifications" aria-label="Notifications" onclick="toggleNotes(event)" data-dyn><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg><span id="notesBadge"></span></button>
     <button class="hbtn dl-btn" id="dlBtn" style="display:none" title="Downloads" aria-label="Downloads" onclick="openDownloads()" data-dyn><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg><span id="dlBadge"></span></button>
+    <button class="hbtn" id="lanBtn" title="Steam Deck & Mobile Link" aria-label="Steam Deck & Mobile Link" onclick="openLanShareModal()"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="5" r="1" fill="currentColor"/></svg></button>
     <button class="hbtn" id="helpBtn" title="Help" aria-label="Help" onclick="openHelp()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .9c0 1.7-2.5 2.2-2.5 3.9M12 17.2h.01"/></svg></button>
     <button class="hbtn" title="Settings" aria-label="Settings" onclick="openSettings()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     <button class="hbtn" title="API Keys Vault" aria-label="API Keys Vault" onclick="openApiVault()"><svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-2-2l2 2m0 0l-5 5a5 5 0 1 0-7 7l1.5-1.5a3 3 0 0 1 4.2 0l.8.8a1 1 0 0 0 1.4 0l1.4-1.4a1 1 0 0 0 0-1.4l-.8-.8a3 3 0 0 1 0-4.2L21 4z"/></svg></button>
@@ -1452,6 +1461,7 @@
               <option value="name">🔤 Name (A-Z)</option>
               <option value="date">📅 Date (Newest)</option>
             </select>
+            <button class="btn" style="padding:4px 10px; font-size:11px; white-space:nowrap;" onclick="triggerAutoSort()" title="Smart Load Order Optimizer (Sort by loaders, frameworks, scripts, assets, and dependencies)">⚡ Auto-Sort</button>
           </div>
           <div class="ml-chips" id="mlChips" data-dyn></div>
           <div class="ml-bulk" id="mlBulk" data-dyn style="display:none"></div>
@@ -1731,17 +1741,59 @@
   </div>
 </div>
 
-<!-- MOD KEYBIND & CONFIG EDITOR MODAL -->
-<div class="modal-backdrop" id="modConfigModal">
-  <div class="glass-card modal-window">
+<!-- STEAM DECK & MOBILE LINK (LAN P2P) MODAL -->
+<div class="modal-backdrop" id="lanShareModal" onclick="if (event.target === this) closeModals()">
+  <div class="glass-card modal-window" style="width:480px; max-width:92vw; text-align:center;">
     <div class="modal-hdr">
-      <span id="modConfigTitle" data-dyn></span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:18px;">📱</span>
+        <span style="font-weight:700; font-size:15px;">Steam Deck &amp; Mobile Link</span>
+      </div>
       <button class="btn" onclick="closeModals()">✕</button>
     </div>
-    <textarea id="modConfigEditor" class="input-field" style="z-index:2; height:260px; user-select:text;" spellcheck="false"></textarea>
-    <div style="display:flex; gap:10px; justify-content:flex-end; z-index:2;">
-      <button class="btn btn-play" style="padding:7px 18px;" onclick="saveModConfig()">💾 Save Config</button>
-      <button class="btn" onclick="closeModals()">Cancel</button>
+    <div style="z-index:2; display:flex; flex-direction:column; align-items:center; gap:14px; padding:8px 0;">
+      <div style="font-size:12.5px; color:var(--text-muted); line-height:1.5;">
+        Scan with your Steam Deck, tablet or smartphone to manage mods and launch games remotely over your local network.
+      </div>
+      <div id="lanQrCodeContainer" style="background:#ffffff; padding:12px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(0,0,0,0.3); min-width:180px; min-height:180px;">
+        <svg id="lanQrSvg" width="160" height="160" viewBox="0 0 160 160"></svg>
+      </div>
+      <div style="width:100%; display:flex; flex-direction:column; gap:8px;">
+        <input type="text" id="lanShareUrl" class="input-field" readonly style="font-family:monospace; text-align:center; font-size:12px; user-select:all;" onclick="this.select()">
+        <button class="btn btn-play" onclick="copyLanShareUrl()" style="align-self:center; padding:6px 20px;">📋 Copy Pairing Link</button>
+      </div>
+      <div class="cp-note" id="lanShareTip" style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+        Tip: Launch with <code>--lan</code> or set <code>MODFORGE_LAN=1</code> to listen on 0.0.0.0 for all local network devices.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MOD CONFIG & TWEAK STUDIO MODAL -->
+<div class="modal-backdrop" id="modConfigModal" onclick="if (event.target === this) closeModals()">
+  <div class="glass-card modal-window" style="width:740px; max-width:94vw; display:flex; flex-direction:column; gap:10px;">
+    <div class="modal-hdr">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:18px;">⚙</span>
+        <span id="modConfigTitle" style="font-weight:700; font-size:15px;" data-dyn>Mod Config Studio</span>
+      </div>
+      <button class="btn" onclick="closeModals()">✕</button>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; z-index:2; flex-wrap:wrap;">
+      <label style="font-size:12px; color:var(--text-muted); font-weight:600;">Config File:</label>
+      <select id="modConfigFileSelect" class="proton-select" style="flex:1; min-width:220px; padding:5px 8px; font-size:12px;" onchange="changeModConfigFile()"></select>
+      <button class="btn" style="padding:4px 10px; font-size:12px;" onclick="reloadModConfigFile()" title="Reload from disk">⟳ Reload</button>
+    </div>
+    <div id="modConfigFilePathBadge" style="font-size:11px; color:var(--text-muted); font-family:var(--font-mono, monospace); word-break:break-all;"></div>
+    <div style="position:relative; z-index:2; flex:1; display:flex; flex-direction:column;">
+      <textarea id="modConfigEditor" class="input-field" style="height:320px; font-family:monospace; font-size:12px; line-height:1.5; tab-size:2; white-space:pre; resize:vertical; user-select:text;" spellcheck="false"></textarea>
+    </div>
+    <div style="display:flex; align-items:center; justify-content:space-between; z-index:2; font-size:11px; color:var(--text-muted); flex-wrap:wrap; gap:8px;">
+      <span>🛡 Automatic <code>.bak</code> safety backup created. Changes live-sync to deployed game files if enabled.</span>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-play" style="padding:6px 18px;" onclick="saveModConfigStudio()">💾 Save &amp; Apply</button>
+        <button class="btn" onclick="closeModals()">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3007,30 +3059,277 @@
     closeModals();
   }
 
-  async function openModConfig(index) {
-    const m = appState.mods[index];
-    if (!m) return;
-    editingModId = m.id;
-    const res = await fetch('/api/mod_config_get', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: m.id })
-    });
-    const data = await res.json();
-    if (data.error) showToast(tm(data.error));
-    if (data.content !== undefined) {
-      document.getElementById('modConfigTitle').textContent = `⚙ ${data.mod_name} — ${data.file_name}`;
-      document.getElementById('modConfigEditor').value = data.content;
-      document.getElementById('modConfigModal').classList.add('open');
+  // --- Steam Deck & LAN Share QR & Link ---
+  function createQRCode(text) {
+    const exp = new Uint8Array(512), log = new Uint8Array(256);
+    let x = 1;
+    for (let i = 0; i < 255; i++) { exp[i] = x; exp[i + 255] = x; log[x] = i; x = (x << 1) ^ (x >= 128 ? 0x11d : 0); }
+    const gmul = (a, b) => (!a || !b ? 0 : exp[log[a] + log[b]]);
+    const VERSIONS = [
+      [1, 26, 19, 7, []],
+      [2, 44, 34, 10, [6, 18]],
+      [3, 70, 55, 15, [6, 22]],
+      [4, 100, 80, 20, [6, 26]],
+      [5, 134, 108, 26, [6, 30]],
+      [6, 172, 136, 36, [6, 34]],
+      [7, 196, 156, 40, [6, 22, 38]],
+      [8, 242, 194, 48, [6, 24, 42]],
+    ];
+    const utf8 = new TextEncoder().encode(text);
+    let vInfo = VERSIONS.find(v => v[2] >= utf8.length + 3) || VERSIONS[VERSIONS.length - 1];
+    const [version, totalBytes, dataBytes, ecBytes, align] = vInfo;
+    const size = version * 4 + 17;
+    const bits = [];
+    const pushBits = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1); };
+    pushBits(4, 4); pushBits(utf8.length, version < 10 ? 8 : 16);
+    for (const b of utf8) pushBits(b, 8);
+    pushBits(0, Math.min(4, dataBytes * 8 - bits.length));
+    while (bits.length % 8 !== 0) bits.push(0);
+    const bytes = [];
+    for (let i = 0; i < bits.length; i += 8) {
+      let b = 0; for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
+      bytes.push(b);
+    }
+    const pads = [0xEC, 0x11]; let pIdx = 0;
+    while (bytes.length < dataBytes) bytes.push(pads[pIdx++ % 2]);
+    const poly = [1];
+    for (let i = 0; i < ecBytes; i++) {
+      const next = new Array(poly.length + 1).fill(0);
+      for (let j = 0; j < poly.length; j++) { next[j] ^= gmul(poly[j], exp[i]); next[j + 1] ^= poly[j]; }
+      for (let j = 0; j < next.length; j++) poly[j] = next[j];
+    }
+    const ecc = new Array(ecBytes).fill(0);
+    for (let i = 0; i < bytes.length; i++) {
+      const factor = bytes[i] ^ ecc[0];
+      ecc.shift(); ecc.push(0);
+      for (let j = 0; j < ecBytes; j++) ecc[j] ^= gmul(poly[j + 1] || 0, factor);
+    }
+    const codewords = bytes.concat(ecc);
+    const matrix = Array.from({ length: size }, () => new Array(size).fill(null));
+    const reserved = Array.from({ length: size }, () => new Array(size).fill(false));
+    const setMod = (r, c, val) => { if (r >= 0 && r < size && c >= 0 && c < size) { matrix[r][c] = val; reserved[r][c] = true; } };
+    const drawFinder = (ro, co) => {
+      for (let r = -1; r <= 7; r++) {
+        for (let c = -1; c <= 7; c++) {
+          const nr = ro + r, nc = co + c;
+          if (nr < 0 || nr >= size || nc < 0 || nc >= size) continue;
+          setMod(nr, nc, (r === -1 || r === 7 || c === -1 || c === 7) ? 0 : ((r === 0 || r === 6 || c === 0 || c === 6 || (r >= 2 && r <= 4 && c >= 2 && c <= 4)) ? 1 : 0));
+        }
+      }
+    };
+    drawFinder(0, 0); drawFinder(0, size - 7); drawFinder(size - 7, 0);
+    for (let i = 8; i < size - 8; i++) { setMod(6, i, i % 2 === 0 ? 1 : 0); setMod(i, 6, i % 2 === 0 ? 1 : 0); }
+    if (align.length > 0) {
+      for (const r of align) {
+        for (const c of align) {
+          if (reserved[r][c]) continue;
+          for (let dr = -2; dr <= 2; dr++) {
+            for (let dc = -2; dc <= 2; dc++) setMod(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) === 1 ? 0 : 1);
+          }
+        }
+      }
+    }
+    for (let i = 0; i < 9; i++) {
+      if (!reserved[8][i]) { matrix[8][i] = 0; reserved[8][i] = true; }
+      if (!reserved[i][8]) { matrix[i][8] = 0; reserved[i][8] = true; }
+      if (!reserved[8][size - 1 - i]) { matrix[8][size - 1 - i] = 0; reserved[8][size - 1 - i] = true; }
+      if (!reserved[size - 1 - i][8]) { matrix[size - 1 - i][8] = 0; reserved[size - 1 - i][8] = true; }
+    }
+    setMod(size - 8, 8, 1);
+    let bitIdx = 0; const totalBits = codewords.length * 8;
+    for (let right = size - 1; right > 0; right -= 2) {
+      if (right === 6) right--;
+      for (let vert = 0; vert < size; vert++) {
+        for (let j = 0; j < 2; j++) {
+          const c = right - j, upwards = ((right + 1) & 2) === 0, r = upwards ? size - 1 - vert : vert;
+          if (!reserved[r][c]) {
+            let bit = (bitIdx < totalBits) ? ((codewords[bitIdx >> 3] >> (7 - (bitIdx & 7))) & 1) : 0;
+            bitIdx++;
+            if ((r + c) % 2 === 0) bit ^= 1;
+            matrix[r][c] = bit;
+          }
+        }
+      }
+    }
+    const formatBits = 0x77c4;
+    for (let i = 0; i < 15; i++) {
+      const bit = (formatBits >> (14 - i)) & 1;
+      if (i < 6) matrix[8][i] = bit; else if (i < 8) matrix[8][i + 1] = bit; else matrix[8 - (i - 7)][8] = bit;
+      if (i < 8) matrix[size - 1 - i][8] = bit; else matrix[8][size - 1 - (14 - i)] = bit;
+    }
+    return { size, matrix };
+  }
+
+  function drawQrCode(text, svgEl) {
+    if (!svgEl) return;
+    try {
+      const { size, matrix } = createQRCode(text);
+      const pad = 2, total = size + pad * 2;
+      let paths = '';
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (matrix[r][c] === 1) paths += `M${c + pad},${r + pad}h1v1h-1z `;
+        }
+      }
+      svgEl.setAttribute('viewBox', `0 0 ${total} ${total}`);
+      svgEl.innerHTML = `<rect width="${total}" height="${total}" fill="#ffffff"/><path d="${paths}" fill="#0a0e17"/>`;
+    } catch (e) {
+      console.warn('QR error', e);
     }
   }
 
-  function saveModConfig() {
-    ipcSend('/api/mod_config_save', {
-      id: editingModId,
-      content: document.getElementById('modConfigEditor').value
-    });
-    closeModals();
+  async function openLanShareModal() {
+    document.getElementById('lanShareModal').classList.add('open');
+    const urlEl = document.getElementById('lanShareUrl');
+    const qrSvg = document.getElementById('lanQrSvg');
+    if (urlEl) urlEl.value = 'Connecting to LAN endpoint…';
+    try {
+      const res = await fetch('/api/lan_info');
+      const data = await res.json();
+      const url = data.url || (data.ip ? `http://${data.ip}:${data.port || 19450}/` : window.location.href);
+      if (urlEl) urlEl.value = url;
+      drawQrCode(url, qrSvg);
+    } catch (e) {
+      if (urlEl) urlEl.value = window.location.href;
+      drawQrCode(window.location.href, qrSvg);
+    }
+  }
+
+  function copyLanShareUrl() {
+    const urlEl = document.getElementById('lanShareUrl');
+    if (urlEl && urlEl.value) {
+      navigator.clipboard.writeText(urlEl.value).then(() => {
+        showToast(t('📋 Pairing link copied to clipboard!'));
+      }).catch(() => {
+        urlEl.select();
+        document.execCommand('copy');
+        showToast(t('📋 Pairing link copied!'));
+      });
+    }
+  }
+
+  // --- Mod Config Studio ---
+  let cfgStudioModId = null;
+  let cfgStudioFiles = [];
+  let cfgStudioCurrentFile = '';
+
+  async function openModConfigStudio(modId, modName) {
+    cfgStudioModId = modId;
+    const titleEl = document.getElementById('modConfigTitle');
+    if (titleEl) titleEl.textContent = `⚙ ${modName || 'Mod'} — Config Studio`;
+    const sel = document.getElementById('modConfigFileSelect');
+    const badge = document.getElementById('modConfigFilePathBadge');
+    const editor = document.getElementById('modConfigEditor');
+    if (editor) editor.value = t('Scanning mod files for configurations…');
+    if (sel) sel.innerHTML = `<option value="">${t('Scanning…')}</option>`;
+    if (badge) badge.textContent = '';
+    document.getElementById('modConfigModal').classList.add('open');
+
+    try {
+      const res = await fetch(`/api/mod_configs?id=${encodeURIComponent(modId)}`);
+      const data = await res.json();
+      if (data.error) {
+        showToast(tm(data.error));
+        if (editor) editor.value = `// ${data.error}`;
+        return;
+      }
+      cfgStudioFiles = data.files || [];
+      if (cfgStudioFiles.length === 0) {
+        if (sel) sel.innerHTML = `<option value="">${t('No config files (.ini, .cfg, .toml, .json, .lua, .txt)')}</option>`;
+        if (editor) editor.value = `// ${t('No tweakable configuration or script files found in this mod.')}`;
+        return;
+      }
+      if (sel) {
+        sel.innerHTML = cfgStudioFiles.map(f => `<option value="${escapeHtml(f.path)}">${escapeHtml(f.path)} (${fmtSize(f.size)})</option>`).join('');
+      }
+      loadModConfigFile(cfgStudioFiles[0].path);
+    } catch (e) {
+      if (editor) editor.value = `// ${t('Failed to query mod config files.')}`;
+    }
+  }
+
+  function changeModConfigFile() {
+    const sel = document.getElementById('modConfigFileSelect');
+    if (sel && sel.value) loadModConfigFile(sel.value);
+  }
+
+  function reloadModConfigFile() {
+    const sel = document.getElementById('modConfigFileSelect');
+    if (sel && sel.value) loadModConfigFile(sel.value);
+  }
+
+  async function loadModConfigFile(relPath) {
+    cfgStudioCurrentFile = relPath;
+    const badge = document.getElementById('modConfigFilePathBadge');
+    if (badge) badge.textContent = `Path: ${relPath}`;
+    const editor = document.getElementById('modConfigEditor');
+    if (editor) editor.value = t('Loading file content…');
+    try {
+      const res = await fetch('/api/mod_config_read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: cfgStudioModId, file: relPath })
+      });
+      const data = await res.json();
+      if (data.error) {
+        showToast(tm(data.error));
+        if (editor) editor.value = `// ${data.error}`;
+      } else {
+        if (editor) editor.value = data.content || '';
+      }
+    } catch (e) {
+      if (editor) editor.value = `// ${t('Failed to load file.')}`;
+    }
+  }
+
+  async function saveModConfigStudio() {
+    if (!cfgStudioModId || !cfgStudioCurrentFile) return;
+    const editor = document.getElementById('modConfigEditor');
+    const content = editor ? editor.value : '';
+    try {
+      const res = await fetch('/api/mod_config_save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: cfgStudioModId, file: cfgStudioCurrentFile, content })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        showToast(t('💾 Saved config & synced to game (backup created)'));
+        closeModals();
+      } else {
+        showToast(tm(data.error || 'Failed to save config'));
+      }
+    } catch (e) {
+      showToast(t('Failed to save config'));
+    }
+  }
+
+  // Legacy bridge
+  async function openModConfig(index) {
+    const m = (appState.mods || [])[index];
+    if (m) openModConfigStudio(m.id, m.name);
+  }
+  function saveModConfig() { saveModConfigStudio(); }
+
+  // --- Smart Load Order Optimizer ---
+  async function triggerAutoSort() {
+    showToast(t('⚡ Analyzing mod dependencies and sorting…'));
+    try {
+      const res = await fetch('/api/optimize_load_order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (data.ok) {
+        showToast(tp(data.count, '⚡ Sorted {} mod by engine priority & dependencies', '⚡ Sorted {} mods by engine priority & dependencies'));
+        ipcSend('/api/rescan');
+      } else {
+        showToast(tm(data.error || 'Auto-sort failed'));
+      }
+    } catch (e) {
+      showToast(t('Failed to optimize load order'));
+    }
   }
 
   async function openUe4ssLog() {
@@ -3594,7 +3893,15 @@
       else if (document.querySelector('.modal-backdrop.open')) closeTopModal();
       else { const sel = document.querySelector('.game-item.selected, .game-card.selected'); if (sel) { sel.tabIndex = 0; sel.focus(); } }
     }
-    else if (btn === 'x') playChecked();
+    else if (btn === 'x') {
+      const mlRow = cur && cur.closest ? cur.closest('.ml-row') : null;
+      if (mlRow) {
+        const toggle = mlRow.querySelector('input[type="checkbox"], .ml-switch');
+        if (toggle) toggle.click();
+      } else {
+        playChecked();
+      }
+    }
     else if (btn === 'y') { openPalette(); setTimeout(() => oskOpen(document.getElementById('paletteInput')), 60); }
     else if (btn === 'lb' || btn === 'rb') {
       const tabs = ['mods', 'tools', 'activity'];
@@ -3624,7 +3931,17 @@
       for (const name of Object.keys(gpHeld)) if (!down[name]) delete gpHeld[name];
     }
   }
-  window.addEventListener('gamepadconnected', () => { gpSeen = true; if (deckOn) gpFirstFocus(); });
+  window.addEventListener('gamepadconnected', () => { gpSeen = true; if (!deckOn) deckSet(true); gpFirstFocus(); });
+  setInterval(() => {
+    if (!deckOn && navigator.getGamepads) {
+      for (const p of navigator.getGamepads()) {
+        if (p && p.connected && (p.buttons.some(b => b.pressed) || p.axes.some(a => Math.abs(a) > 0.5))) {
+          deckSet(true);
+          break;
+        }
+      }
+    }
+  }, 1000);
 
   // ---------- Play stats and timeline ----------
   let statsAll = false, statsSeq = 0;
@@ -6831,6 +7148,7 @@
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Move to bottom of load order'))}" onclick='ipcSend("/api/lib_move_to", { id: ${JS(m.id)}, to: 999999 })'>⤋</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('About this mod: its page, what changed, what it needs'))}" onclick='openModPage(${JS(m.id)})'>ℹ</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Open staged mod folder in file manager'))}" onclick='ipcSend("/api/open_mod_folder", { id: ${JS(m.id)} })'>📁</button>
+        <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Tweak INI, CFG, JSON, TOML mod configs'))}" onclick='openModConfigStudio(${JS(m.id)}, ${JS(m.name)})'>⚙</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Add a note to this mod'))}" onclick='modLibNote(${JS(m.id)}, ${JS(m.name)}, ${JS(m.note || '')})'>✎</button>
         ${m.notes > 0 ? `<button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Read the instructions that came with this mod'))}" onclick='openNotes(${JS(m.id)}, ${JS(m.name)})'>📄</button>` : ''}
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Install into another folder of the game')}" onclick='modLibTarget(${JS(m.id)}, ${JS(m.target)})'>📂</button>

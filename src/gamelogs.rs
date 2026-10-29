@@ -35,6 +35,44 @@ fn meta_of(id: &str, path: PathBuf) -> Option<LogFile> {
     Some(LogFile { id: id.into(), modified_ms, size: m.len(), path })
 }
 
+fn find_reframework_log(dir: &Path) -> Option<PathBuf> {
+    for candidate in [
+        dir.join("re_framework_log.txt"),
+        dir.join("reframework/re_framework_log.txt"),
+        dir.join("reframework/re2_framework_log.txt"),
+        dir.join("reframework/re3_framework_log.txt"),
+        dir.join("reframework/re4_framework_log.txt"),
+        dir.join("reframework/re7_framework_log.txt"),
+        dir.join("reframework/re8_framework_log.txt"),
+        dir.join("reframework/mhrise_framework_log.txt"),
+        dir.join("reframework/sf6_framework_log.txt"),
+        dir.join("reframework/dd2_framework_log.txt"),
+    ] {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    let rf = dir.join("reframework");
+    if let Ok(entries) = fs::read_dir(rf) {
+        for e in entries.flatten() {
+            let p = e.path();
+            if p.is_file() && p.file_name().map(|n| n.to_string_lossy().ends_with("_framework_log.txt")).unwrap_or(false) {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+fn find_witcher_log(dir: &Path) -> Option<PathBuf> {
+    for candidate in [dir.join("bin/x64_dx12/scriptlog.txt"), dir.join("bin/x64/scriptlog.txt")] {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 /// The logs that exist for a game, newest first.
 pub fn files(game: &GameEntry, proton_log: Option<PathBuf>) -> Vec<LogFile> {
     let dir = Path::new(&game.game_dir);
@@ -47,6 +85,8 @@ pub fn files(game: &GameEntry, proton_log: Option<PathBuf>) -> Vec<LogFile> {
     };
     add("bepinex", Some(dir.join("BepInEx/LogOutput.log")));
     add("melonloader", Some(dir.join("MelonLoader/Latest.log")));
+    add("reframework", find_reframework_log(dir));
+    add("witcher3", find_witcher_log(dir));
     add("red4ext", crate::kb::newest_log_in(&dir.join("red4ext/logs")));
     add("redscript", Some(dir.join("r6/logs/redscript_rCURRENT.log")));
     add("cet", Some(dir.join("bin/x64/plugins/cyber_engine_tweaks/cyber_engine_tweaks.log")));
@@ -119,5 +159,23 @@ mod tests {
         fs::write(&p, [b"x".repeat(5000), b"\n\xff\xfe\n".to_vec()].concat()).unwrap();
         let (l2, _) = read(&p, "").unwrap();
         assert_eq!((l2.len(), l2[0].text.chars().count()), (2, 2000));
+    }
+
+    #[test]
+    fn reframework_and_witcher3_logs_are_discovered() {
+        let d = TempDir::new("re_witcher_logs");
+        let rf_dir = d.join("reframework");
+        fs::create_dir_all(&rf_dir).unwrap();
+        fs::write(rf_dir.join("re4_framework_log.txt"), "REFramework initialized\n").unwrap();
+        let w_dir = d.join("bin/x64_dx12");
+        fs::create_dir_all(&w_dir).unwrap();
+        fs::write(w_dir.join("scriptlog.txt"), "[Script] Mod loaded\n").unwrap();
+
+        let mut ge = crate::repair::fixtures::make_game("re_witcher").1;
+        ge.game_dir = d.path().to_string_lossy().to_string();
+
+        let list = files(&ge, None);
+        assert!(list.iter().any(|f| f.id == "reframework"));
+        assert!(list.iter().any(|f| f.id == "witcher3"));
     }
 }

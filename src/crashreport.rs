@@ -1,5 +1,5 @@
-//! When Gantry itself fails: a short report on this computer that the person can read before sending it anywhere.
-//! Nothing is sent by Gantry. The report holds the version, the system, where in the program it failed and the end
+//! When ModForge itself fails: a short report on this computer that the person can read before sending it anywhere.
+//! Nothing is sent by ModForge. The report holds the version, the system, where in the program it failed and the end
 //! of the log, with the home folder written as `~`.
 
 use std::fs;
@@ -8,6 +8,18 @@ use std::path::{Path, PathBuf};
 
 /// How many reports are kept (the oldest go first).
 const KEEP: usize = 10;
+
+/// `text` with common authentication secrets (API keys, tokens, passwords) replaced with `[REDACTED]`.
+pub fn redact_secrets(text: &str) -> String {
+    let mut out = text.to_string();
+    if let Ok(re_token) = regex::Regex::new(r#"(?i)(token|key|api_key|secret|password)=([a-zA-Z0-9_\-\.]{8,})"#) {
+        out = re_token.replace_all(&out, "$1=[REDACTED]").to_string();
+    }
+    if let Ok(re_bearer) = regex::Regex::new(r#"(?i)(bearer\s+)([a-zA-Z0-9_\-\.]{8,})"#) {
+        out = re_bearer.replace_all(&out, "$1[REDACTED]").to_string();
+    }
+    out
+}
 
 /// `text` with the person's home folder (in either slash style) written as `~`.
 pub fn redact(text: &str, home: &str) -> String {
@@ -40,7 +52,8 @@ pub fn write(dir: &Path, now_ms: u64, version: &str, os: &str, what: &str, log_t
         "ModForge {version} on {os}\n\nWhat failed:\n{what}\n\nThe end of the log:\n{log_tail}\n\nNothing in this file was sent anywhere. Read it before you attach it to a bug report.\n"
     );
     let path = dir.join(format!("crash-{now_ms}.txt"));
-    fs::write(&path, redact(&body, home))?;
+    let sanitized = redact(&redact_secrets(&body), home);
+    fs::write(&path, sanitized)?;
     for old in list(dir).into_iter().skip(KEEP) {
         let _ = fs::remove_file(old);
     }
@@ -109,5 +122,15 @@ mod tests {
         assert_eq!(unseen(&d, 1013), 0);
         assert_eq!(unseen(&d.join("nothing"), 0), 0);
         let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn tokens_and_secrets_are_redacted() {
+        let input = "GET /api/lan_info?token=12345678abcdef HTTP/1.1\nAuthorization: Bearer my_secret_bearer_token\n";
+        let out = redact_secrets(input);
+        assert!(!out.contains("12345678abcdef"));
+        assert!(!out.contains("my_secret_bearer_token"));
+        assert!(out.contains("token=[REDACTED]"));
+        assert!(out.contains("Bearer [REDACTED]"));
     }
 }

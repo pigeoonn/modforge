@@ -303,6 +303,81 @@ pub fn detect_source(dir: &Path) -> Option<SourceInfo> {
     })
 }
 
+/// What kind of Capcom RE Engine game a folder holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ReEngineInfo {
+    pub game: &'static str,
+    pub loader: String,
+}
+
+/// What the RE Engine game in `dir` is like, or `None` when it is not an RE Engine game.
+pub fn detect_re_engine(dir: &Path) -> Option<ReEngineInfo> {
+    let check_exe = |name: &str| exists_ci(dir, name).is_some();
+    let game = if check_exe("re2.exe") {
+        "Resident Evil 2"
+    } else if check_exe("re3.exe") {
+        "Resident Evil 3"
+    } else if check_exe("re4.exe") {
+        "Resident Evil 4"
+    } else if check_exe("re7.exe") {
+        "Resident Evil 7"
+    } else if check_exe("re8.exe") || check_exe("Village.exe") {
+        "Resident Evil Village"
+    } else if check_exe("MonsterHunterWorld.exe") {
+        "Monster Hunter: World"
+    } else if check_exe("MonsterHunterRise.exe") {
+        "Monster Hunter Rise"
+    } else if check_exe("MonsterHunterWilds.exe") {
+        "Monster Hunter Wilds"
+    } else if check_exe("DevilMayCry5.exe") {
+        "Devil May Cry 5"
+    } else if check_exe("DD2.exe") {
+        "Dragon's Dogma 2"
+    } else if check_exe("StreetFighter6.exe") {
+        "Street Fighter 6"
+    } else if exists_ci(dir, "natives").map(|p| p.is_dir()).unwrap_or(false)
+        || exists_ci(dir, "reframework").map(|p| p.is_dir()).unwrap_or(false)
+    {
+        "RE Engine Game"
+    } else {
+        return None;
+    };
+
+    let loader = if exists_ci(dir, "dinput8.dll").is_some() || exists_ci(dir, "reframework").map(|p| p.is_dir()).unwrap_or(false) {
+        "reframework"
+    } else {
+        ""
+    };
+
+    Some(ReEngineInfo {
+        game,
+        loader: loader.to_string(),
+    })
+}
+
+/// What kind of Witcher 3 (REDengine 3) installation a folder holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Witcher3Info {
+    pub is_witcher3: bool,
+    pub has_mods_dir: bool,
+}
+
+/// What the Witcher 3 game in `dir` is like, or `None` when it is not Witcher 3.
+pub fn detect_witcher3(dir: &Path) -> Option<Witcher3Info> {
+    let has_exe = dir.join("bin/x64/witcher3.exe").is_file()
+        || dir.join("bin/x64_dx12/witcher3.exe").is_file()
+        || exists_ci(dir, "witcher3.exe").is_some();
+    let has_content = dir.join("content").is_dir();
+    if has_exe || (has_content && exists_ci(dir, "r4game").is_some()) {
+        Some(Witcher3Info {
+            is_witcher3: true,
+            has_mods_dir: dir.join("mods").is_dir(),
+        })
+    } else {
+        None
+    }
+}
+
 // ───────────────────────────── where to get them ─────────────────────────────
 
 #[derive(Clone, Debug)]
@@ -624,5 +699,36 @@ mod tests {
         let ginfo = detect_source(&gsrc).expect("should detect GoldSrc");
         assert_eq!(ginfo.game_dir_name, "valve");
         assert!(ginfo.is_goldsrc);
+    }
+
+    #[test]
+    fn re_engine_games_and_reframework_are_detected() {
+        let d = TempDir::new("re_engine");
+        let re4 = d.join("Resident Evil 4");
+        fs::create_dir_all(&re4).unwrap();
+        fs::write(re4.join("re4.exe"), pe(0x8664)).unwrap();
+
+        let info = detect_re_engine(&re4).expect("should detect RE4");
+        assert_eq!(info.game, "Resident Evil 4");
+        assert_eq!(info.loader, "");
+
+        fs::write(re4.join("dinput8.dll"), pe(0x8664)).unwrap();
+        assert_eq!(detect_re_engine(&re4).unwrap().loader, "reframework");
+    }
+
+    #[test]
+    fn witcher3_game_and_mods_folder_are_detected() {
+        let d = TempDir::new("witcher3");
+        let w3 = d.join("The Witcher 3");
+        fs::create_dir_all(w3.join("bin/x64")).unwrap();
+        fs::write(w3.join("bin/x64/witcher3.exe"), pe(0x8664)).unwrap();
+        fs::create_dir_all(w3.join("content")).unwrap();
+
+        let info = detect_witcher3(&w3).expect("should detect Witcher 3");
+        assert!(info.is_witcher3);
+        assert!(!info.has_mods_dir);
+
+        fs::create_dir_all(w3.join("mods")).unwrap();
+        assert!(detect_witcher3(&w3).unwrap().has_mods_dir);
     }
 }

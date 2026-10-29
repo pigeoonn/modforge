@@ -49,26 +49,48 @@ pub fn kind_at(at_ms: u64, sessions: &[Session]) -> &'static str {
 
 /// Every Steam screenshot of `appid` in these Steam installs, newest first.
 pub fn list(steam_roots: &[PathBuf], appid: &str, sessions: &[Session]) -> Vec<Shot> {
-    if !digits(appid) {
-        return Vec::new();
-    }
+    list_with_dirs(steam_roots, appid, sessions, &[])
+}
+
+/// Every Steam and local game screenshot from extra folders (e.g. game/Screenshots or Wine prefix Pictures), newest first.
+pub fn list_with_dirs(steam_roots: &[PathBuf], appid: &str, sessions: &[Session], extra_dirs: &[PathBuf]) -> Vec<Shot> {
     let mut out: Vec<Shot> = Vec::new();
-    for root in steam_roots {
-        for acct in fs::read_dir(root.join("userdata")).into_iter().flatten().flatten() {
-            let dir = acct.path().join("760/remote").join(appid).join("screenshots");
-            for e in fs::read_dir(&dir).into_iter().flatten().flatten() {
-                let path = e.path();
-                let Ok(meta) = e.metadata() else { continue };
-                if !meta.is_file() || meta.len() > MAX_BYTES || !is_picture(&path) {
-                    continue;
+    if digits(appid) {
+        for root in steam_roots {
+            for acct in fs::read_dir(root.join("userdata")).into_iter().flatten().flatten() {
+                let dir = acct.path().join("760/remote").join(appid).join("screenshots");
+                for e in fs::read_dir(&dir).into_iter().flatten().flatten() {
+                    let path = e.path();
+                    let Ok(meta) = e.metadata() else { continue };
+                    if !meta.is_file() || meta.len() > MAX_BYTES || !is_picture(&path) {
+                        continue;
+                    }
+                    let Some(at_ms) = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64) else { continue };
+                    let name = e.file_name().to_string_lossy().to_string();
+                    let thumb = dir.join("thumbnails").join(&name);
+                    out.push(Shot { name, at_ms, kind: kind_at(at_ms, sessions), thumb: thumb.is_file().then_some(thumb), path });
                 }
-                let Some(at_ms) = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64) else { continue };
-                let name = e.file_name().to_string_lossy().to_string();
-                let thumb = dir.join("thumbnails").join(&name);
-                out.push(Shot { name, at_ms, kind: kind_at(at_ms, sessions), thumb: thumb.is_file().then_some(thumb), path });
             }
         }
     }
+
+    for dir in extra_dirs {
+        for e in fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = e.path();
+            let Ok(meta) = e.metadata() else { continue };
+            if !meta.is_file() || meta.len() > MAX_BYTES || !is_picture(&path) {
+                continue;
+            }
+            let Some(at_ms) = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as u64) else { continue };
+            let name = e.file_name().to_string_lossy().to_string();
+            if out.iter().any(|s| s.path == path || s.name == name) {
+                continue;
+            }
+            let thumb = dir.join("thumbnails").join(&name);
+            out.push(Shot { name, at_ms, kind: kind_at(at_ms, sessions), thumb: thumb.is_file().then_some(thumb), path });
+        }
+    }
+
     out.sort_by(|a, b| b.at_ms.cmp(&a.at_ms).then_with(|| a.name.cmp(&b.name)));
     out.truncate(MAX);
     out
@@ -154,5 +176,20 @@ mod tests {
         // something that is not a picture is never handed out
         let bad = Shot { name: "x".into(), at_ms: 0, kind: "unknown", path: dir.join("../../../../../../../etc/passwd"), thumb: None };
         assert!(bytes(&bad, false).is_none());
+    }
+
+    #[test]
+    fn extra_screenshot_folders_are_scanned_even_without_steam_id() {
+        let d = TempDir::new("custom_shots");
+        let extra = d.join("Screenshots");
+        picture(&extra, "shot1.png", 2_000_000, false);
+        picture(&extra, "shot2.jpg", 3_000_000, true);
+        let sessions = vec![session(1_500_000, 2_500_000, 2)];
+        let l = list_with_dirs(&[], "custom_game_999", &sessions, &[extra]);
+        assert_eq!(l.len(), 2);
+        assert_eq!(l[0].name, "shot2.jpg");
+        assert_eq!(l[0].kind, "unknown");
+        assert_eq!(l[1].name, "shot1.png");
+        assert_eq!(l[1].kind, "modded");
     }
 }
