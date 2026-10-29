@@ -5,7 +5,7 @@ Thank you for looking. Gantry is a Rust program with one HTML page as its interf
 ## Getting it running
 
 ```bash
-git clone https://github.com/pigeoonn/gantry.git && cd gantry
+git clone https://github.com/pigeoonn/modforge.git && cd modforge
 cargo build --release
 ./target/release/rig          # opens the interface; RIG_NO_WINDOW=1 starts only the server
 ```

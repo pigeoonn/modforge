@@ -110,7 +110,7 @@ mod tests {
     use serde_json::json;
 
     fn assets(names: &[&str]) -> Value {
-        Value::Array(names.iter().map(|n| json!({ "name": n, "browser_download_url": format!("https://github.com/pigeoonn/gantry/releases/download/v9/{n}") })).collect())
+        Value::Array(names.iter().map(|n| json!({ "name": n, "browser_download_url": format!("https://github.com/pigeoonn/modforge/releases/download/v9/{n}") })).collect())
     }
 
     #[test]

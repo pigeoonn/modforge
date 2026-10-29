@@ -6,16 +6,16 @@ modded game in about ten minutes.
 
 ## 1. Install
 
-**Arch / CachyOS / Manjaro:** `git clone https://github.com/pigeoonn/gantry && cd gantry/packaging/arch && makepkg -si`.
+**Arch / CachyOS / Manjaro:** `git clone https://github.com/pigeoonn/modforge && cd modforge/packaging/arch && makepkg -si`.
 
-**Any Linux:** download the AppImage from the [Releases page](https://github.com/pigeoonn/gantry/releases/latest), make it executable (`chmod +x Gantry-*.AppImage`) and run it.
+**Any Linux:** download the AppImage from the [Releases page](https://github.com/pigeoonn/modforge/releases/latest), make it executable (`chmod +x ModForge-*.AppImage`) and run it.
 
-**From source:** install Rust (`rustup`), then `cargo build --release`; the program is `target/release/rig`. Run
-`rig --install` to add a menu entry and an icon.
+**From source:** install Rust (`rustup`), then `cargo build --release`; the program is `target/release/modforge`. Run
+`modforge --install` to add a menu entry and an icon.
 
-**Windows:** unzip the release anywhere and run `rig.exe`. Windows SmartScreen may warn because the file is not signed:
+**Windows:** unzip the release anywhere and run `modforge.exe`. Windows SmartScreen may warn because the file is not signed:
 choose *More info*, then *Run anyway*.
-**macOS (Apple silicon):** `brew install --cask pigeoonn/gantry/gantry`, or download the `.tar.gz` and follow the macOS
+**macOS (Apple silicon):** `brew install --cask pigeoonn/modforge/modforge`, or download the `.tar.gz` and follow the macOS
 steps in the [installation guide](INSTALL.md).
 
 Gantry needs a Chromium based browser (Brave, Chrome, Chromium, Edge) for its window; it uses an "app window" so it

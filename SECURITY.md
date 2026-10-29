@@ -5,7 +5,7 @@ each start and is only given to that window. It stores API keys (Nexus, Steam) i
 prints or sends them anywhere but to the site they belong to.
 
 Please report a security problem privately, with **Security → Report a vulnerability** on the
-[repository page](https://github.com/pigeoonn/gantry/security/advisories/new), instead of a public issue. Things worth reporting: a way for a web page or another user to make Gantry run something,
+[repository page](https://github.com/pigeoonn/modforge/security/advisories/new), instead of a public issue. Things worth reporting: a way for a web page or another user to make Gantry run something,
 read a file, or leak a key; a mod archive that can write outside the game folder; a crash while reading a hostile mod
 page, installer script or archive.
 

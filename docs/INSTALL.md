@@ -98,7 +98,7 @@ Build from source instead if you prefer; the per-distribution steps follow.
 
 ```bash
 sudo pacman -S --needed git base-devel rust curl libarchive wayland libxkbcommon xdg-utils p7zip
-git clone https://github.com/pigeoonn/gantry.git
+git clone https://github.com/pigeoonn/modforge.git
 cd gantry/packaging/arch
 makepkg -si          # builds and installs the package: the "rig" command and a menu entry
 ```
@@ -116,7 +116,7 @@ sudo apt install -y git build-essential pkg-config curl libarchive-tools p7zip-f
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env"
 
-git clone https://github.com/pigeoonn/gantry.git
+git clone https://github.com/pigeoonn/modforge.git
 cd gantry
 cargo build --release
 ./target/release/rig --install      # menu entry, icon and the "rig" command in ~/.local/bin
@@ -129,7 +129,7 @@ sudo dnf install -y git gcc pkgconf-pkg-config curl bsdtar p7zip p7zip-plugins \
                     wayland-devel libxkbcommon-devel xdg-utils
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env"
-git clone https://github.com/pigeoonn/gantry.git && cd gantry
+git clone https://github.com/pigeoonn/modforge.git && cd gantry
 cargo build --release
 ./target/release/rig --install
 ```
@@ -140,7 +140,7 @@ cargo build --release
 sudo zypper install -y git gcc pkg-config curl bsdtar p7zip wayland-devel libxkbcommon-devel xdg-utils
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env"
-git clone https://github.com/pigeoonn/gantry.git && cd gantry
+git clone https://github.com/pigeoonn/modforge.git && cd gantry
 cargo build --release
 ./target/release/rig --install
 ```
@@ -152,7 +152,7 @@ Install the same things under your distribution's names (`git`, a C compiler, `p
 <https://rustup.rs>, then:
 
 ```bash
-git clone https://github.com/pigeoonn/gantry.git && cd gantry
+git clone https://github.com/pigeoonn/modforge.git && cd gantry
 cargo build --release
 ./target/release/rig --install
 ```

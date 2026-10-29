@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/pigeoonn/gantry/releases"><img src="https://img.shields.io/github/v/release/pigeoonn/gantry?include_prereleases&label=release&color=00f2fe" alt="Release" /></a>
+  <a href="https://github.com/pigeoonn/modforge/releases"><img src="https://img.shields.io/github/v/release/pigeoonn/modforge?include_prereleases&label=release&color=00f2fe" alt="Release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="License" /></a>
   <a href="#"><img src="https://img.shields.io/badge/GUI-Native%20PyQt6-10b981" alt="GUI" /></a>
   <a href="#"><img src="https://img.shields.io/badge/Engine-Rust%206.0-f59e0b" alt="Engine" /></a>
@@ -65,7 +65,7 @@ Your original game files are sacred. ModForge employs a non-destructive library 
 
 ### Arch Linux / CachyOS / Manjaro (PKGBUILD)
 ```bash
-git clone https://github.com/pigeoonn/gantry.git modforge
+git clone https://github.com/pigeoonn/modforge.git
 cd modforge/packaging/arch
 makepkg -si
 ```
@@ -73,7 +73,7 @@ makepkg -si
 ### Direct Run from Source
 ```bash
 # Clone the repository
-git clone https://github.com/pigeoonn/gantry.git modforge
+git clone https://github.com/pigeoonn/modforge.git
 cd modforge
 
 # Build the Rust release engine

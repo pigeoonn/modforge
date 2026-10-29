@@ -31,8 +31,8 @@
   </categories>
 
   <developer_name>ModForge Contributors</developer_name>
-  <url type="homepage">https://github.com/pigeoonn/gantry</url>
-  <url type="bugtracker">https://github.com/pigeoonn/gantry/issues</url>
+  <url type="homepage">https://github.com/pigeoonn/modforge</url>
+  <url type="bugtracker">https://github.com/pigeoonn/modforge/issues</url>
 
   <releases>
     <release version="6.0.0" date="2026-10-29">

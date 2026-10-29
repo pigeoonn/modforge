@@ -3697,8 +3697,8 @@ fn nexus_install_needs(state: &SharedState, appid: &str, lib_id: &str) {
     }
 }
 
-/// Gantry's own home on GitHub.
-const SELF_REPO: (&str, &str) = ("pigeoonn", "gantry");
+/// ModForge's own home on GitHub.
+const SELF_REPO: (&str, &str) = ("pigeoonn", "modforge");
 
 /// One of Gantry's own help pages on GitHub. Only these few names exist; anything else opens nothing.
 fn docs_url(page: &str) -> Option<String> {
@@ -17237,7 +17237,7 @@ mod tests {
 
     #[test]
     fn the_help_buttons_only_reach_gantrys_own_pages() {
-        assert_eq!(docs_url("faq").as_deref(), Some("https://github.com/pigeoonn/gantry/blob/main/docs/FAQ.md"));
+        assert_eq!(docs_url("faq").as_deref(), Some("https://github.com/pigeoonn/modforge/blob/main/docs/FAQ.md"));
         assert!(docs_url("guide").is_some() && docs_url("reference").is_some() && docs_url("tutorial").is_some() && docs_url("install").is_some());
         for bad in ["", "../x", "GUIDE.md", "https://example.com", "faq/../../x"] {
             assert!(docs_url(bad).is_none(), "{bad}");
@@ -17250,9 +17250,9 @@ mod tests {
     #[test]
     fn the_issue_form_opens_with_the_version_or_the_game_filled_in() {
         let bug = issue_url(false, "Gantry 5.1.0 on Arch Linux", "ignored");
-        assert_eq!(bug, "https://github.com/pigeoonn/gantry/issues/new?template=bug.yml&version=Gantry%205.1.0%20on%20Arch%20Linux");
+        assert_eq!(bug, "https://github.com/pigeoonn/modforge/issues/new?template=bug.yml&version=Gantry%205.1.0%20on%20Arch%20Linux");
         let game = issue_url(true, "ignored", "Mafia III & more (Steam or custom)");
-        assert!(game.starts_with("https://github.com/pigeoonn/gantry/issues/new?template=game.yml&game=Mafia%20III%20%26%20more"), "{game}");
+        assert!(game.starts_with("https://github.com/pigeoonn/modforge/issues/new?template=game.yml&game=Mafia%20III%20%26%20more"), "{game}");
         assert!(!game.contains(' ') && !game.contains("ignored"));
         // the button only ever reaches GitHub
         let h = harness("issueform");
@@ -17264,17 +17264,17 @@ mod tests {
     fn a_newer_gantry_release_is_noticed_and_an_older_or_equal_one_is_not() {
         let h = harness("selfupdate");
         for (tag, newer) in [("v99.0.0", true), ("v5.0.0", false), ("v0.1.0", false)] {
-            let (base, _) = github::fake::start_tagged("pigeoonn", "gantry", tag, vec![]);
+            let (base, _) = github::fake::start_tagged("pigeoonn", "modforge", tag, vec![]);
             h.state.write().unwrap().github_api = base;
             assert_eq!(newer_gantry(&h.state).is_some(), newer, "{tag}");
         }
-        let (base, _) = github::fake::start_tagged("pigeoonn", "gantry", "v99.0.0", vec![]);
+        let (base, _) = github::fake::start_tagged("pigeoonn", "modforge", "v99.0.0", vec![]);
         h.state.write().unwrap().github_api = base;
         api(&h, "/api/self_update_check", json!({}));
         wait_until("noticed", || api(&h, "/api/state", json!({}))["new_version"] == "v99.0.0");
         assert_eq!(api(&h, "/api/state", json!({}))["app_version"], env!("CARGO_PKG_VERSION"));
         // a beta is a pre-release, which GitHub's "latest" answer leaves out: the list has it
-        let (base, _) = github::fake::start_prerelease_only("pigeoonn", "gantry", "v99.1.0");
+        let (base, _) = github::fake::start_prerelease_only("pigeoonn", "modforge", "v99.1.0");
         h.state.write().unwrap().github_api = base;
         assert_eq!(newer_gantry(&h.state).map(|(t, _)| t).as_deref(), Some("v99.1.0"));
         // nothing answers (a private repository, no connection): quietly no news
@@ -17296,7 +17296,7 @@ mod tests {
             if let Some(s) = sum {
                 files.push((Box::leak(format!("{name}.sha256").into_boxed_str()) as &str, format!("{s}  {name}\n").into_bytes()));
             }
-            let (base, hits) = github::fake::start_many(vec![("pigeoonn/gantry", "v99.0.0", files)]);
+            let (base, hits) = github::fake::start_many(vec![("pigeoonn/modforge", "v99.0.0", files)]);
             let mut st = h.state.write().unwrap();
             st.github_allow = Some(format!("{base}/dl/"));
             st.github_api = base;
