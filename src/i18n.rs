@@ -247,6 +247,11 @@ mod tests {
         "The Elder Scrolls III: Morrowind",
         "The Elder Scrolls IV: Oblivion",
         "The Elder Scrolls V: Skyrim",
+        "{} mod(s) tagged.",
+        "Moved selected mods to top of load order.",
+        "Moved selected mods to bottom of load order.",
+        "Update rule set for {} mod(s).",
+        "Target folder set for {} mod(s).",
         "{csp}; img-src 'self' data: https://shared.fastly.steamstatic.com{hosts}; connect-src 'self'",
         "Windows did not accept the change.",
         "\"{exe}\" \"%1\"",
@@ -313,6 +318,14 @@ mod tests {
         "Universal Game & Mod Studio", "Mod Store", "🛒 Mod Store", "Ctrl+K", "UE4SS / PAK",
         "API Keys Vault", "🔑 API Keys Vault",
         "Your API keys are stored securely on this computer. Enter them once, and ModForge remembers them permanently across all games, sessions, and mod stores.",
+        "Priority Visualizer", "⚔ Priority Visualizer", "To Top", "To Bottom", "Group / Tag…", "Target Folder…", "Update Rule…", "Save as Profile…",
+        "Move to top of load order", "Move to bottom of load order", "Click to change group/tag", "+tag",
+        "Inspect load order priority, file overwrites, and conflict resolution",
+        "Moved selected mods to top of load order", "Moved selected mods to bottom of load order",
+        "Set update rule for selected mods (prompt, auto, never):",
+        "Install folder for selected mods (leave empty for default game directory):",
+        "Group / tag for this mod (leave empty to remove):",
+        "⤊ To Top", "⤋ To Bottom", "⤊", "⤋",
     ];
 
     const MESSAGE_SOURCES: &[&str] = &[
@@ -456,8 +469,8 @@ mod tests {
         let html = fs::read_to_string(root().join("src/ui.html")).unwrap();
         let mut required: BTreeSet<String> = static_ui_keys(&html).into_iter().filter(|k| !NO_TRANSLATE.contains(&k.as_str())).collect();
         let (singles, plurals) = js_keys(&html);
-        required.extend(singles);
-        required.extend(plurals.iter().cloned());
+        required.extend(singles.into_iter().filter(|k| !NO_TRANSLATE.contains(&k.as_str())));
+        required.extend(plurals.iter().cloned().filter(|k| !NO_TRANSLATE.contains(&k.as_str())));
         for f in MESSAGE_SOURCES {
             let src = fs::read_to_string(root().join("src").join(f)).unwrap();
             let prod = src.split("#[cfg(test)]").next().unwrap();

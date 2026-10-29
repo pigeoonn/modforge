@@ -999,15 +999,20 @@
   .ml-chip small { opacity: .88; margin-left: 4px; }
   .ml-bulk { z-index: 2; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 12px; border-radius: 12px; background: var(--acc-soft); border: 1px solid var(--acc); }
   .ml-bulk b { margin-right: 6px; }
-  .ml-grip { cursor: grab; color: var(--text-muted); font-size: 16px; line-height: 1; user-select: none; padding: 0 2px; }
+  .ml-grip { cursor: grab; color: var(--text-muted); font-size: 16px; line-height: 1; user-select: none; padding: 0 4px; transition: color .15s; }
+  .ml-grip:hover { color: var(--acc); }
   .ml-grip:active { cursor: grabbing; }
-  .ml-row.dragging { opacity: .35; }
-  .ml-row.over-top { box-shadow: 0 -3px 0 var(--acc); }
-  .ml-row.over-bottom { box-shadow: 0 3px 0 var(--acc); }
+  .ml-row.dragging { opacity: .35; transform: scale(0.985); }
+  .ml-row.over-top { box-shadow: 0 -3px 0 0 var(--acc), 0 -8px 16px -4px rgba(56, 189, 248, 0.45); }
+  .ml-row.over-bottom { box-shadow: 0 3px 0 0 var(--acc), 0 8px 16px -4px rgba(56, 189, 248, 0.45); }
   .ml-row.sel { border-color: var(--acc); background: var(--acc-soft); }
   .ml-n { cursor: pointer; min-width: 22px; text-align: center; border-radius: 6px; }
   .ml-n:hover { background: var(--n4); }
   .ml-n.on { background: var(--acc); color: var(--acc-ink); font-weight: 800; }
+  .ml-prio-chip { font-size: 10px; font-weight: 800; font-family: ui-monospace, 'SF Mono', Menlo, monospace; padding: 1px 6px; border-radius: 6px; background: color-mix(in srgb, var(--text-muted) 16%, transparent); color: var(--text-muted); margin-left: 6px; letter-spacing: 0.3px; }
+  .ml-tag-btn { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--text-muted); margin-left: 6px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; display: inline-flex; align-items: center; }
+  .ml-tag-btn:hover { background: var(--acc-soft); color: var(--acc-fg, var(--acc)); border-color: var(--acc); }
+  .ml-tag-btn.has-tag { border-color: color-mix(in srgb, var(--acc) 50%, var(--line-2)); color: var(--acc-fg, var(--acc)); background: color-mix(in srgb, var(--acc) 10%, transparent); }
   .ml-src { display: inline-block; min-width: 18px; text-align: center; font-size: 9.5px; font-weight: 800; padding: 1px 4px; margin-right: 6px; border-radius: 5px; vertical-align: 1px; background: color-mix(in srgb, var(--text-muted) 16%, transparent); color: var(--text); }
   .ml-src.nx { background: color-mix(in srgb, #f59e0b 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #f59e0b 45%, transparent); color: var(--text); }
   .ml-src.ts { background: color-mix(in srgb, #3b82f6 22%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, #3b82f6 45%, transparent); color: var(--text); }
@@ -1420,6 +1425,7 @@
             <button class="btn" style="padding:6px 12px;" onclick="modLibThunder()" title="Install a package from Mod Store (Risk of Rain 2, Valheim, Lethal Company and more) with everything it needs">🛒 Mod Store</button>
             <button class="btn btn-heal" id="mlUpdateAll" style="padding:6px 12px; display:none" onclick="ipcSend('/api/update_all', {})">⬆ Update all</button>
             <button class="btn" id="mlCheck" style="padding:6px 12px;" onclick="checkNexusUpdates()" title="Ask Nexus Mods whether newer files exist for the mods you installed from there">🔄 Check for updates</button>
+            <button class="btn" style="padding:6px 12px;" onclick="openLibConflicts()" title="Inspect load order priority, file overwrites, and conflict resolution">⚔ Priority Visualizer</button>
             <button class="btn" style="padding:6px 12px;" onclick="openMoreMenu(event)" title="Share or import a setup, fix placement, open the folder">⋯ More</button>
             <span style="flex:1"></span>
             <select class="proton-select" id="mlHistory" data-dyn style="padding:5px 8px; font-size:11px;" onchange="modLibHistory(this.value)"></select>
@@ -6437,6 +6443,11 @@
     undoToast(on ? tp(mlShownIds.length, '{} mod turned on', '{} mods turned on') : tp(mlShownIds.length, '{} mod turned off', '{} mods turned off'), () => ipcSend('/api/lib_undo', {}));
   }
 
+  function mlChangeGroup(id, cur) {
+    const name = prompt(t('Group / tag for this mod (leave empty to remove):'), cur || '');
+    if (name !== null) ipcSend('/api/lib_group', { ids: [id], group: name.trim() });
+  }
+
   function mlBulk(what) {
     const lib = modLibData();
     const ids = [...mlSel];
@@ -6444,11 +6455,29 @@
     if (what === 'on' || what === 'off') {
       ipcSend('/api/lib_toggle_many', { ids, enabled: what === 'on' });
       undoToast(what === 'on' ? tp(ids.length, '{} mod turned on', '{} mods turned on') : tp(ids.length, '{} mod turned off', '{} mods turned off'), () => ipcSend('/api/lib_undo', {}));
+    } else if (what === 'top') {
+      ipcSend('/api/lib_move_many_to', { ids, top: true });
+      undoToast(t('Moved selected mods to top of load order'), () => ipcSend('/api/lib_undo', {}));
+    } else if (what === 'bottom') {
+      ipcSend('/api/lib_move_many_to', { ids, top: false });
+      undoToast(t('Moved selected mods to bottom of load order'), () => ipcSend('/api/lib_undo', {}));
     } else if (what === 'group') {
       const cur = (lib.mods.find(m => ids.includes(m.id)) || {}).group || '';
       const name = prompt(t('Group name (leave empty to remove the group):'), cur);
       if (name === null) return;
       ipcSend('/api/lib_group', { ids, group: name });
+    } else if (what === 'rule') {
+      const cur = (lib.mods.find(m => ids.includes(m.id)) || {}).update_rule || 'prompt';
+      const rule = prompt(t('Set update rule for selected mods (prompt, auto, never):'), cur);
+      if (rule !== null && ['prompt', 'auto', 'never'].includes(rule.trim().toLowerCase())) {
+        ipcSend('/api/lib_update_rule_many', { ids, rule: rule.trim().toLowerCase() });
+      }
+    } else if (what === 'target') {
+      const cur = (lib.mods.find(m => ids.includes(m.id)) || {}).target || '';
+      const target = prompt(t('Install folder for selected mods (leave empty for default game directory):'), cur);
+      if (target !== null) {
+        ipcSend('/api/lib_target_many', { ids, target: target.trim() });
+      }
     } else if (what === 'remove') {
       const names = lib.mods.filter(m => ids.includes(m.id)).map(m => m.name);
       const needed = lib.mods.filter(m => ids.includes(m.id) && (m.needed_by || []).some(n => !names.includes(n))).map(m => m.name);
@@ -6616,7 +6645,7 @@
     const bulk = document.getElementById('mlBulk');
     if (mlSel.size) {
       bulk.style.display = 'flex';
-      bulk.innerHTML = `<b>${t('{} selected', mlSel.size)}</b><button class="btn" onclick="mlBulk('on')">${t('Turn on')}</button><button class="btn" onclick="mlBulk('off')">${t('Turn off')}</button><button class="btn" onclick="mlBulk('group')">${t('Group…')}</button><button class="btn btn-danger" onclick="mlBulk('remove')">${t('Remove')}</button><button class="btn" onclick="mlSel.clear(); renderModLib()">${t('Clear')}</button>`;
+      bulk.innerHTML = `<b>${t('{} selected', mlSel.size)}</b><button class="btn" onclick="mlBulk('on')">${t('Turn on')}</button><button class="btn" onclick="mlBulk('off')">${t('Turn off')}</button><button class="btn" onclick="mlBulk('top')">${t('⤊ To Top')}</button><button class="btn" onclick="mlBulk('bottom')">${t('⤋ To Bottom')}</button><button class="btn" onclick="mlBulk('group')">${t('Group / Tag…')}</button><button class="btn" onclick="mlBulk('target')">${t('Target Folder…')}</button><button class="btn" onclick="mlBulk('rule')">${t('Update Rule…')}</button><button class="btn btn-danger" onclick="mlBulk('remove')">${t('Remove')}</button><button class="btn" onclick="mlSel.clear(); renderModLib()">${t('Clear')}</button>`;
     } else bulk.style.display = 'none';
     const seen = mlSeenIds[g ? g.appid : ''];
     mlSeenIds[g ? g.appid : ''] = new Set(lib.mods.map(m => m.id));
@@ -6634,7 +6663,7 @@
         <span class="ml-n ${mlSel.has(m.id) ? 'on' : ''}" onclick='mlSelect(event, ${JS(m.id)})' title="${escapeHtml(t('Select (Shift: a range)'))}" aria-label="${escapeHtml(t('Select {}', m.name))}" aria-pressed="${mlSel.has(m.id)}">${mlSel.has(m.id) ? '✓' : i + 1}</span>
         <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange='ipcSend("/api/lib_toggle", { id: ${JS(m.id)}, enabled: this.checked })' title="${t('Enable / disable')}">
         <div class="ml-main">
-          <div class="ml-name">${dot ? `<span class="ml-dot ${dot[0]}" title="${escapeHtml(dot[1])}"></span>` : ''}<span class="ml-src ${src[0]}" title="${escapeHtml(src[1])}">${src[0] === 'hand' ? '✋' : src[0] === 'nx' ? 'N' : src[0] === 'ts' ? 'TS' : src[0] === 'mio' ? 'io' : 'GH'}</span>${escapeHtml(m.name)}${m.group ? `<span class="ml-group">${escapeHtml(m.group)}</span>` : ''} ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>
+          <div class="ml-name">${dot ? `<span class="ml-dot ${dot[0]}" title="${escapeHtml(dot[1])}"></span>` : ''}<span class="ml-src ${src[0]}" title="${escapeHtml(src[1])}">${src[0] === 'hand' ? '✋' : src[0] === 'nx' ? 'N' : src[0] === 'ts' ? 'TS' : src[0] === 'mio' ? 'io' : 'GH'}</span>${escapeHtml(m.name)}<span class="ml-prio-chip">#${i + 1}</span><span class="ml-tag-btn ${m.group ? 'has-tag' : ''}" onclick='mlChangeGroup(${JS(m.id)}, ${JS(m.group || "")})' title="${escapeHtml(t('Click to change group/tag'))}">${m.group ? escapeHtml(m.group) : t('+tag')}</span> ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>
           ${need ? `<div class="ml-need">⚠ ${t('Needs')}: ${need.missing.map(r => r.page_url ? `<a onclick='openNexusPage(${JS(r.page_url)})' title="${escapeHtml(r.notes || t('Open its Nexus page'))}">↗ ${escapeHtml(r.name)}</a>` : escapeHtml(r.name)).join(', ')}<button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:6px" title="${escapeHtml(nx.premium ? '' : t('Opens their Nexus pages one after another: press Mod Manager Download on each and Gantry installs it.'))}" onclick='ipcSend("/api/nexus_install_needs", { appid: ${JS(need.appid)}, lib_id: ${JS(need.lib_id)} })'>${nx.premium ? t('Install them') : t('Get them')}</button></div>` : ''}
           ${cores.length ? `<div class="ml-need">⚠ ${t('Needs')}: ${cores.map(c => `<span style="white-space:nowrap"><a onclick='openWeb(${JS(c.url)})' title="${escapeHtml(t('Open its page'))}">↗ ${escapeHtml(c.name)}</a><button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:4px" title="${escapeHtml(t('Installs it from its official releases, with what it needs itself'))}" onclick='ipcSend("/api/core_install", { name: ${JS(c.name)} })'>${t('Install {}', escapeHtml(c.name))}</button></span>`).join(' ')}</div>` : ''}
           ${(m.wins || []).length || (m.loses || []).length ? `<div class="ml-sub wrap">⚔ ${[].concat((m.wins || []).map(w => escapeHtml(tp(w.files, 'wins {} file over {}', 'wins {} files over {}', w.mod))), (m.loses || []).map(w => escapeHtml(tp(w.files, 'loses {} file to {}', 'loses {} files to {}', w.mod)))).join(' · ')}${(m.loses || []).length ? ` <button class="btn" style="padding:1px 8px; font-size:10.5px" onclick='ipcSend("/api/lib_prefer", { winner: ${JS(m.id)}, over: "" })'>${t('Let it win them all')}</button>` : ''} <button class="btn" style="padding:1px 8px; font-size:10.5px" onclick='openLibConflicts(${JS(m.name)})'>${t('Show')}</button></div>` : ''}
@@ -6644,8 +6673,10 @@
         ${tup ? `<button class="btn btn-heal" style="padding:3px 9px; font-size:11px;" onclick='ipcSend("/api/thunder_update", { appid: ${JS(tup.appid)}, id: ${JS(tup.lib_id)} })'>⬆ v${escapeHtml(tup.installed_version)} → v${escapeHtml(tup.new_version)}</button>` : ''}
         ${up ? `<button class="btn btn-heal" style="padding:3px 9px; font-size:11px;" title="${escapeHtml(up.new_file_name + (up.changes ? '\n\n' + up.changes : ''))}" onclick='ipcSend("/api/nexus_update", { appid: ${JS(up.appid)}, id: ${JS(up.lib_id)} })'>⬆ ${up.installed_version ? 'v' + escapeHtml(up.installed_version) + ' → ' : ''}v${escapeHtml(up.new_version || '?')}</button>` : ''}
         ${prev ? `<button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Go back to v{}? The current version stays in the library trash, so you can return to it.', prev.version))}" onclick='if (confirm(${JS(t('Go back to v{}? The current version stays in the library trash, so you can return to it.', prev.version))})) ipcSend("/api/lib_rollback", { id: ${JS(m.id)}, dir: ${JS(prev.dir)} })'>↶ v${escapeHtml(prev.version || '?')}</button>` : ''}
+        <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Move to top of load order'))}" onclick='ipcSend("/api/lib_move_to", { id: ${JS(m.id)}, to: 0 })'>⤊</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Load earlier (loses conflicts)')}" onclick='ipcSend("/api/lib_move", { id: ${JS(m.id)}, delta: -1 })'>▲</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Load later (wins conflicts)')}" onclick='ipcSend("/api/lib_move", { id: ${JS(m.id)}, delta: 1 })'>▼</button>
+        <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Move to bottom of load order'))}" onclick='ipcSend("/api/lib_move_to", { id: ${JS(m.id)}, to: 999999 })'>⤋</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('About this mod: its page, what changed, what it needs'))}" onclick='openModPage(${JS(m.id)})'>ℹ</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Add a note to this mod'))}" onclick='modLibNote(${JS(m.id)}, ${JS(m.name)}, ${JS(m.note || '')})'>✎</button>
         ${m.notes > 0 ? `<button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Read the instructions that came with this mod'))}" onclick='openNotes(${JS(m.id)}, ${JS(m.name)})'>📄</button>` : ''}

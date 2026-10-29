@@ -6235,7 +6235,54 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/lib_group" => {
             let (ids, group) = (body_strings(body, "ids"), body_str(body, "group"));
-            library_task(state, move |_, lib, _| lib.set_group(&ids, &group).map(|n| format!("{} mod(s) grouped.", n)));
+            library_task(state, move |st, lib, _| {
+                let n = lib.set_group(&ids, &group)?;
+                log(st, "OK", format!("{} mod(s) tagged.", n));
+                library_apply(st, lib, false)
+            });
+        }
+        "/api/lib_move_many_to" => {
+            let (ids, to_top) = (body_strings(body, "ids"), body.get("top").and_then(|v| v.as_bool()).unwrap_or(false));
+            library_task(state, move |st, lib, _| {
+                if to_top {
+                    for (idx, id) in ids.iter().enumerate() {
+                        let _ = lib.move_to(id, idx);
+                    }
+                } else {
+                    let total = lib.mods().len();
+                    for id in ids.iter().rev() {
+                        let _ = lib.move_to(id, total.saturating_sub(1));
+                    }
+                }
+                log(st, "OK", if to_top { "Moved selected mods to top of load order." } else { "Moved selected mods to bottom of load order." });
+                library_apply(st, lib, false)
+            });
+        }
+        "/api/lib_update_rule_many" => {
+            let (ids, rule) = (body_strings(body, "ids"), body_str(body, "rule"));
+            library_task(state, move |st, lib, _| {
+                let mut count = 0;
+                for id in &ids {
+                    if lib.set_update_rule(id, &rule).is_ok() {
+                        count += 1;
+                    }
+                }
+                log(st, "OK", format!("Update rule set for {} mod(s).", count));
+                library_apply(st, lib, false)
+            });
+        }
+        "/api/lib_target_many" => {
+            let (ids, target) = (body_strings(body, "ids"), body_str(body, "target"));
+            library_task(state, move |st, lib, _| {
+                let mut count = 0;
+                for id in &ids {
+                    if lib.set_target(id, &target).is_ok() {
+                        count += 1;
+                    }
+                }
+                log(st, "OK", format!("Target folder set for {} mod(s).", count));
+                library_apply(st, lib, false)
+            });
         }
         "/api/lib_remove_many" => {
             let ids = body_strings(body, "ids");
@@ -17726,5 +17773,65 @@ mod tests {
         }
         let resolved = modio_game_for(&h.state, &g);
         assert_eq!(resolved.unwrap(), 7);
+    }
+
+    #[test]
+    fn batch_actions_and_tagging_update_library_order_and_rules() {
+        let h = harness("batch_ops");
+        add_plain_game(&h);
+        let g = h.state.read().unwrap().games.last().unwrap().clone();
+        let lib = library_of(&g).unwrap();
+
+        for name in ["Mod Alpha", "Mod Beta", "Mod Gamma"] {
+            let s = h._dir.join(&format!("batch-{name}"));
+            fs::create_dir_all(s.join("Data")).unwrap();
+            fs::write(s.join(format!("Data/{name}.esp")), "CONTENT").unwrap();
+            lib.add_with(&s, name, &format!("{name}.zip"), None, "1.0").unwrap();
+        }
+        refresh_mods_shared(&h.state);
+
+        let mods = lib.mods();
+        assert_eq!(mods.len(), 3);
+        let id_a = mods[0].id.clone();
+        let id_b = mods[1].id.clone();
+        let id_c = mods[2].id.clone();
+
+        // 1. Tagging / Custom Grouping
+        api(&h, "/api/lib_group", json!({ "ids": [id_a.clone(), id_b.clone()], "group": "Visuals" }));
+        wait_until("mods grouped", || {
+            let m = lib.mods();
+            m.iter().find(|x| x.id == id_a).unwrap().group == "Visuals" &&
+            m.iter().find(|x| x.id == id_b).unwrap().group == "Visuals"
+        });
+
+        // 2. Batch Update Rule
+        api(&h, "/api/lib_update_rule_many", json!({ "ids": [id_a.clone(), id_c.clone()], "rule": "never" }));
+        wait_until("update rules set", || {
+            let m = lib.mods();
+            m.iter().find(|x| x.id == id_a).unwrap().update_rule == "never" &&
+            m.iter().find(|x| x.id == id_c).unwrap().update_rule == "never"
+        });
+
+        // 3. Batch Target Folder
+        api(&h, "/api/lib_target_many", json!({ "ids": [id_b.clone(), id_c.clone()], "target": "submods" }));
+        wait_until("targets set", || {
+            let m = lib.mods();
+            m.iter().find(|x| x.id == id_b).unwrap().target == "submods" &&
+            m.iter().find(|x| x.id == id_c).unwrap().target == "submods"
+        });
+
+        // 4. Batch Move To Bottom
+        api(&h, "/api/lib_move_many_to", json!({ "ids": [id_a.clone()], "top": false }));
+        wait_until("alpha moved to bottom", || {
+            let m = lib.mods();
+            m.last().unwrap().id == id_a
+        });
+
+        // Batch Move To Top: Move [Gamma, Alpha] to top in order -> [Gamma, Alpha, Beta]
+        api(&h, "/api/lib_move_many_to", json!({ "ids": [id_c.clone(), id_a.clone()], "top": true }));
+        wait_until("gamma and alpha moved to top", || {
+            let m = lib.mods();
+            m[0].id == id_c && m[1].id == id_a
+        });
     }
 }
