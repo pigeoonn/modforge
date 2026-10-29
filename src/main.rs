@@ -44,6 +44,7 @@ pub mod background;
 pub mod perf;
 pub mod recipes;
 pub mod repair;
+pub mod reshade;
 pub mod saves;
 pub mod selfupdate;
 pub mod screenshots;
@@ -3923,7 +3924,8 @@ fn compat_info(state: &SharedState, g: &GameEntry) -> Value {
         }
     };
     let presets: Vec<Value> = compat::PRESETS.iter().map(|(id, line, text)| json!({ "id": id, "line": line, "text": text, "on": compat::preset_on(&g.env_vars, line) })).collect();
-    json!({ "kind": if steam_game { "steam" } else { "direct" }, "steam_running": steam_running, "tools": tools, "current": current, "presets": presets })
+    let perf_presets: Vec<Value> = compat::PERF_PRESETS.iter().map(|(id, line, text)| json!({ "id": id, "line": line, "text": text, "on": compat::preset_on(&g.env_vars, line) })).collect();
+    json!({ "kind": if steam_game { "steam" } else { "direct" }, "steam_running": steam_running, "tools": tools, "current": current, "presets": presets, "perf_presets": perf_presets })
 }
 
 /// Give the selected game another Proton: through Steam's settings for Steam games (Steam closed),
@@ -4978,7 +4980,25 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
                 (st.games.get(st.selected_idx).cloned(), st.cache_root())
             };
             let snaps = game.map(|g| saves::list(&g, &cache_root)).unwrap_or_default();
-            return respond_json(req, 200, json!({ "snapshots": snaps }).to_string());
+            let enriched: Vec<Value> = snaps.iter().enumerate().map(|(i, s)| {
+                let prev = snaps.get(i + 1);
+                let (delta_bytes, delta_files, bloat_warning) = if let Some(p) = prev {
+                    let d_bytes = s.bytes as i64 - p.bytes as i64;
+                    let d_files = s.files as i64 - p.files as i64;
+                    let bloat = p.bytes > 5_000_000 && d_bytes > 50_000_000 && (s.bytes > p.bytes * 2);
+                    (d_bytes, d_files, bloat)
+                } else {
+                    (0, 0, false)
+                };
+                let mut v = serde_json::to_value(s).unwrap_or_default();
+                if let Some(obj) = v.as_object_mut() {
+                    obj.insert("delta_bytes".into(), json!(delta_bytes));
+                    obj.insert("delta_files".into(), json!(delta_files));
+                    obj.insert("bloat_warning".into(), json!(bloat_warning));
+                }
+                v
+            }).collect();
+            return respond_json(req, 200, json!({ "snapshots": enriched }).to_string());
         }
         "/api/share_code" => {
             let body = match selected_game(&state).filter(|g| g.is_installed).and_then(|g| library_of(&g).map(|l| l.export_spec(&g.name))) {
@@ -5048,6 +5068,93 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
                 }
                 None => respond_json(req, 404, json!({ "error": "no such picture" }).to_string()),
             };
+        }
+        "/api/mod_audio_stream" => {
+            let mod_id = query_param(&query, "id").unwrap_or_default();
+            let file_rel = query_param(&query, "file").unwrap_or_default();
+            if mod_id.is_empty() || file_rel.is_empty() || file_rel.contains("..") {
+                return respond_json(req, 400, json!({ "error": "Invalid audio file path" }).to_string());
+            }
+            let (game, staged_dir) = {
+                let st = read_state(&state);
+                let g = st.games.get(st.selected_idx).cloned();
+                let lib = g.as_ref().and_then(library_of);
+                let sdir = lib.as_ref().map(|l| l.mod_files_dir(&mod_id));
+                (g, sdir)
+            };
+            let found = if let (Some(_g), Some(dir)) = (game, staged_dir) {
+                let full = dir.join(&file_rel);
+                if full.starts_with(&dir) && full.is_file() {
+                    let ext = full.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    let ctype = match ext.as_str() {
+                        "mp3" => "audio/mpeg",
+                        "ogg" => "audio/ogg",
+                        "wav" => "audio/wav",
+                        "flac" => "audio/flac",
+                        "m4a" | "aac" => "audio/mp4",
+                        "opus" => "audio/opus",
+                        _ => "application/octet-stream",
+                    };
+                    fs::read(&full).ok().map(|b| (b, ctype))
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            return match found {
+                Some((bytes, ctype)) => {
+                    let _ = req.respond(
+                        Response::from_data(bytes)
+                            .with_header(Header::from_bytes(&b"Content-Type"[..], ctype.as_bytes()).unwrap())
+                            .with_header(Header::from_bytes(&b"Accept-Ranges"[..], &b"bytes"[..]).unwrap())
+                            .with_header(nocache_header()),
+                    );
+                }
+                None => respond_json(req, 404, json!({ "error": "Audio track not found" }).to_string()),
+            };
+        }
+        "/api/mod_audio_list" if *req.method() == Method::Get => {
+            let mod_id = query_param(&query, "id").unwrap_or_default();
+            let (game, lib_mod, staged_dir) = {
+                let st = read_state(&state);
+                let g = st.games.get(st.selected_idx).cloned();
+                let lib = g.as_ref().and_then(library_of);
+                let lm = lib.as_ref().and_then(|l| l.mods().into_iter().find(|m| m.id == mod_id));
+                let sdir = lib.as_ref().map(|l| l.mod_files_dir(&mod_id));
+                (g, lm, sdir)
+            };
+            if let (Some(_g), Some(m), Some(dir)) = (game, lib_mod, staged_dir) {
+                let mut tracks = Vec::new();
+                if dir.is_dir() {
+                    for entry in WalkDir::new(&dir).max_depth(8).into_iter().flatten() {
+                        let path = entry.path();
+                        if path.is_file() {
+                            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                            if matches!(ext.as_str(), "mp3" | "ogg" | "wav" | "flac" | "aac" | "m4a" | "opus") {
+                                if let Ok(rel) = path.strip_prefix(&dir) {
+                                    let rel_s = rel.to_string_lossy().replace('\\', "/");
+                                    let fname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| rel_s.clone());
+                                    let size = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+                                    tracks.push(json!({
+                                        "name": fname,
+                                        "path": rel_s,
+                                        "size": size,
+                                        "ext": ext
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                }
+                tracks.sort_by(|a, b| a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or("")));
+                return respond_json(req, 200, json!({
+                    "mod_name": m.name,
+                    "mod_id": m.id,
+                    "tracks": tracks
+                }).to_string());
+            }
+            return respond_json(req, 200, json!({ "error": "Mod not found", "tracks": [] }).to_string());
         }
         "/api/sync_info" => {
             let folder = read_state(&state).config.sync_folder.clone();
@@ -5251,6 +5358,18 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
         "/api/compat" => {
             let Some(g) = selected_game(&state) else { return respond_json(req, 200, json!({}).to_string()) };
             return respond_json(req, 200, compat_info(&state, &g).to_string());
+        }
+        "/api/reshade_status" => {
+            let Some(g) = selected_game(&state) else { return respond_json(req, 200, json!({ "error": "Select a game first" }).to_string()) };
+            let p = Path::new(&g.game_dir);
+            let st = reshade::status(p, &g.env_vars);
+            let presets = reshade::presets();
+            let custom_conf = reshade::read_conf(p);
+            return respond_json(req, 200, json!({
+                "status": st,
+                "presets": presets,
+                "custom_conf": custom_conf
+            }).to_string());
         }
         "/api/disk" => {
             return respond_json(req, 200, disk_report(&state).to_string());
@@ -5458,6 +5577,49 @@ fn handle_request(mut req: Request, state: SharedState, notifier: Arc<EventNotif
         }
 
         return respond_json(req, 404, json!({ "error": "Mod not found." }).to_string());
+    }
+
+    if path == "/api/mod_audio_list" {
+        let mod_id = body_str(&body, "id");
+        let (game, lib_mod, staged_dir) = {
+            let st = read_state(&state);
+            let g = st.games.get(st.selected_idx).cloned();
+            let lib = g.as_ref().and_then(library_of);
+            let lm = lib.as_ref().and_then(|l| l.mods().into_iter().find(|m| m.id == mod_id));
+            let sdir = lib.as_ref().map(|l| l.mod_files_dir(&mod_id));
+            (g, lm, sdir)
+        };
+        if let (Some(_g), Some(m), Some(dir)) = (game, lib_mod, staged_dir) {
+            let mut tracks = Vec::new();
+            if dir.is_dir() {
+                for entry in WalkDir::new(&dir).max_depth(8).into_iter().flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        if matches!(ext.as_str(), "mp3" | "ogg" | "wav" | "flac" | "aac" | "m4a" | "opus") {
+                            if let Ok(rel) = path.strip_prefix(&dir) {
+                                let rel_s = rel.to_string_lossy().replace('\\', "/");
+                                let fname = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| rel_s.clone());
+                                let size = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+                                tracks.push(json!({
+                                    "name": fname,
+                                    "path": rel_s,
+                                    "size": size,
+                                    "ext": ext
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+            tracks.sort_by(|a, b| a["name"].as_str().unwrap_or("").cmp(b["name"].as_str().unwrap_or("")));
+            return respond_json(req, 200, json!({
+                "mod_name": m.name,
+                "mod_id": m.id,
+                "tracks": tracks
+            }).to_string());
+        }
+        return respond_json(req, 404, json!({ "error": "Mod not found.", "tracks": [] }).to_string());
     }
 
     if path == "/api/mod_config_read" {
@@ -5837,8 +5999,9 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 let st = read_state(state);
                 (st.games.get(st.selected_idx).cloned(), st.cache_root())
             };
+            let label = body.get("label").and_then(Value::as_str).unwrap_or("manual");
             if let Some(g) = game_opt {
-                match saves::snapshot(&g, &cache_root, "manual", &save_places(state, &g)) {
+                match saves::snapshot(&g, &cache_root, label, &save_places(state, &g)) {
                     Ok(Some(s)) => log(state, "OK", format!("Backed up {} save file(s) for '{}'.", s.files, g.name)),
                     Ok(None) => log(state, "INFO", "Your saves have not changed since the last backup."),
                     Err(e) => log(state, "WARN", e),
@@ -7172,7 +7335,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/compat_preset" => {
             let (id, on) = (body_str(body, "id"), body.get("on").and_then(Value::as_bool).unwrap_or(false));
-            if let Some((_, line, _)) = compat::PRESETS.iter().find(|p| p.0 == id) {
+            if let Some((_, line, _)) = compat::PRESETS.iter().chain(compat::PERF_PRESETS.iter()).find(|p| p.0 == id) {
                 let mut st = write_state(state);
                 let idx = st.selected_idx;
                 if let Some(g) = st.games.get_mut(idx) {
@@ -7467,6 +7630,80 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 st.save_config();
                 st.save_custom_games();
                 st.log("OK", "Saved custom launch options.");
+            }
+        }
+        "/api/reshade_apply" => {
+            let preset = body.get("preset").and_then(|v| v.as_str()).unwrap_or("crisp_cas");
+            let sharpness = body.get("sharpness").and_then(|v| v.as_f64()).unwrap_or(0.45) as f32;
+            let custom_conf = body.get("custom_conf").and_then(|v| v.as_str());
+            let mut st = write_state(state);
+            let idx = st.selected_idx;
+            if let Some(g) = st.games.get_mut(idx) {
+                let p = Path::new(&g.game_dir);
+                match reshade::apply_reshade(p, &g.env_vars, preset, sharpness, custom_conf) {
+                    Ok(new_envs) => {
+                        g.env_vars = new_envs.clone();
+                        let aid = g.appid.clone();
+                        let args = g.launch_args.clone();
+                        st.config.launch_options.insert(aid, LaunchOpts { launch_args: args, env_vars: new_envs });
+                        st.save_config();
+                        st.save_custom_games();
+                        st.log("OK", format!("Applied ReShade/vkBasalt preset '{}'.", preset));
+                    }
+                    Err(e) => {
+                        st.log("ERR", format!("Failed to apply ReShade: {e}"));
+                    }
+                }
+            }
+        }
+        "/api/reshade_remove" => {
+            let mut st = write_state(state);
+            let idx = st.selected_idx;
+            if let Some(g) = st.games.get_mut(idx) {
+                let p = Path::new(&g.game_dir);
+                match reshade::remove_reshade(p, &g.env_vars) {
+                    Ok(new_envs) => {
+                        g.env_vars = new_envs.clone();
+                        let aid = g.appid.clone();
+                        let args = g.launch_args.clone();
+                        st.config.launch_options.insert(aid, LaunchOpts { launch_args: args, env_vars: new_envs });
+                        st.save_config();
+                        st.save_custom_games();
+                        st.log("OK", "Disabled ReShade/vkBasalt and removed config.");
+                    }
+                    Err(e) => {
+                        st.log("ERR", format!("Failed to disable ReShade: {e}"));
+                    }
+                }
+            }
+        }
+        "/api/reshade_toggle" => {
+            let mut st = write_state(state);
+            let idx = st.selected_idx;
+            if let Some(g) = st.games.get_mut(idx) {
+                let p = Path::new(&g.game_dir);
+                let current_st = reshade::status(p, &g.env_vars);
+                if current_st.active {
+                    if let Ok(new_envs) = reshade::remove_reshade(p, &g.env_vars) {
+                        g.env_vars = new_envs.clone();
+                        let aid = g.appid.clone();
+                        let args = g.launch_args.clone();
+                        st.config.launch_options.insert(aid, LaunchOpts { launch_args: args, env_vars: new_envs });
+                        st.save_config();
+                        st.save_custom_games();
+                        st.log("OK", "Turned off Shaders.");
+                    }
+                } else {
+                    if let Ok(new_envs) = reshade::apply_reshade(p, &g.env_vars, "crisp_cas", 0.45, None) {
+                        g.env_vars = new_envs.clone();
+                        let aid = g.appid.clone();
+                        let args = g.launch_args.clone();
+                        st.config.launch_options.insert(aid, LaunchOpts { launch_args: args, env_vars: new_envs });
+                        st.save_config();
+                        st.save_custom_games();
+                        st.log("OK", "Turned on FidelityFX CAS Shaders.");
+                    }
+                }
             }
         }
         "/api/crash_analyze" => {
@@ -12370,6 +12607,35 @@ mod tests {
         assert_eq!(st["games"][0]["steam_appid"], "", "non-numeric ids rejected");
         let st = api(&h, "/api/set_steam_appid", json!({ "steam_appid": "12345" }));
         assert_eq!(st["games"][0]["steam_appid"], "12345");
+    }
+
+    #[test]
+    fn reshade_endpoints_operate_correctly() {
+        let h = harness("reshade_api");
+        let (c, b) = http(&h, "GET", "/api/reshade_status", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 200);
+        let res: Value = serde_json::from_str(&b).unwrap();
+        assert!(res["presets"].as_array().unwrap().len() >= 5);
+        assert_eq!(res["status"]["active"], false);
+
+        // Apply preset
+        let (c, _) = http(&h, "POST", "/api/reshade_apply", &[("X-Rig-Token", &h.token)], br#"{"preset":"cinematic","sharpness":0.35}"#);
+        assert_eq!(c, 200);
+
+        let (c, b) = http(&h, "GET", "/api/reshade_status", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 200);
+        let res: Value = serde_json::from_str(&b).unwrap();
+        assert_eq!(res["status"]["active"], true);
+        assert_eq!(res["status"]["current_preset"], "cinematic");
+
+        // Toggle off
+        let (c, _) = http(&h, "POST", "/api/reshade_toggle", &[("X-Rig-Token", &h.token)], b"{}");
+        assert_eq!(c, 200);
+
+        let (c, b) = http(&h, "GET", "/api/reshade_status", &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 200);
+        let res: Value = serde_json::from_str(&b).unwrap();
+        assert_eq!(res["status"]["active"], false);
     }
 
     #[test]
@@ -18579,4 +18845,53 @@ mod tests {
             m.len() == 2 && m[0].name == "REFramework Loader" && m[1].name == "UI Tweaks Patch"
         });
     }
+
+    #[test]
+    fn mod_audio_previewer_endpoints_operate_correctly() {
+        let h = harness("audio_previewer");
+        let g = read_state(&h.state).games[0].clone();
+        let lib = library_of(&g).unwrap();
+
+        let s1 = h._dir.join("test-audio-mod");
+        fs::create_dir_all(s1.join("soundtrack")).unwrap();
+        fs::write(s1.join("soundtrack/boss_battle.mp3"), b"ID3\x03\x00\x00\x00mock_mp3_stream_data").unwrap();
+        fs::write(s1.join("soundtrack/ambient_theme.ogg"), b"OggS\x00\x02\x00mock_ogg_stream_data").unwrap();
+        let m1 = lib.add_with(&s1, "Epic Soundtrack Mod", "soundtrack.zip", None, "1.0").unwrap();
+        refresh_mods_shared(&h.state);
+
+        // 1. Test /api/mod_audio_list (GET)
+        let (c, b) = http(&h, "GET", &format!("/api/mod_audio_list?id={}", m1.id), &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 200);
+        let res: Value = serde_json::from_str(&b).unwrap();
+        assert_eq!(res["mod_name"], "Epic Soundtrack Mod");
+        let tracks = res["tracks"].as_array().unwrap();
+        assert_eq!(tracks.len(), 2);
+        assert!(tracks.iter().any(|t| t["name"] == "boss_battle.mp3" && t["ext"] == "mp3"));
+        assert!(tracks.iter().any(|t| t["name"] == "ambient_theme.ogg" && t["ext"] == "ogg"));
+
+        // 2. Test /api/mod_audio_list (POST)
+        let res_post = api(&h, "/api/mod_audio_list", json!({ "id": m1.id }));
+        assert_eq!(res_post["mod_name"], "Epic Soundtrack Mod");
+        assert_eq!(res_post["tracks"].as_array().unwrap().len(), 2);
+
+        // 3. Test /api/mod_audio_stream (stream MP3 and OGG)
+        let boss_track = tracks.iter().find(|t| t["name"] == "boss_battle.mp3").unwrap()["path"].as_str().unwrap();
+        let (c, b) = http(&h, "GET", &format!("/api/mod_audio_stream?id={}&file={}", m1.id, boss_track), &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 200);
+        assert!(b.contains("mock_mp3_stream_data"));
+
+        let ambient_track = tracks.iter().find(|t| t["name"] == "ambient_theme.ogg").unwrap()["path"].as_str().unwrap();
+        let (c, b) = http(&h, "GET", &format!("/api/mod_audio_stream?id={}&file={}", m1.id, ambient_track), &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 200);
+        assert!(b.contains("mock_ogg_stream_data"));
+
+        // 4. Test /api/mod_audio_stream path traversal prevention
+        let (c, _) = http(&h, "GET", &format!("/api/mod_audio_stream?id={}&file=../secret.txt", m1.id), &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 400);
+
+        // 5. Test /api/mod_audio_stream not found
+        let (c, _) = http(&h, "GET", &format!("/api/mod_audio_stream?id={}&file=soundtrack/missing.mp3", m1.id), &[("X-Rig-Token", &h.token)], b"");
+        assert_eq!(c, 404);
+    }
 }
+

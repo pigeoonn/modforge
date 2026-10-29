@@ -230,6 +230,17 @@ pub const PRESETS: &[(&str, &str, &str)] = &[
     ("large_address", "PROTON_FORCE_LARGE_ADDRESS_AWARE=1", "Let 32-bit games use more memory"),
 ];
 
+/// The performance boosters and graphics acceleration presets: `(id, env line, description)`.
+pub const PERF_PRESETS: &[(&str, &str, &str)] = &[
+    ("nvapi_dlss", "PROTON_ENABLE_NVAPI=1", "Enable NVIDIA DLSS / Reflex & NVAPI in Proton"),
+    ("dxvk_async", "DXVK_ASYNC=1", "DXVK Asynchronous Pipeline (eliminates shader compilation stutters)"),
+    ("radv_gpl", "RADV_PERFTEST=gpl", "RADV Graphics Pipeline Library (fast shader caching for AMD)"),
+    ("gamescope_fsr", "WINE_FULLSCREEN_FSR=1", "FSR Upscaling & Sharpness (Steam Deck / Proton Fullscreen)"),
+    ("mangohud_fps", "MANGOHUD=1", "MangoHud Performance & Frame Time Telemetry"),
+    ("gamemode", "GAMEMODERUN=1", "Feral GameMode & Process Scheduling Priority"),
+    ("skip_intro", "MODFORGE_SKIP_INTRO=1", "Skip Intro Videos & Publisher Logos"),
+];
+
 /// Is the preset's line in these environment lines?
 pub fn preset_on(env_vars: &str, line: &str) -> bool {
     env_vars.lines().any(|l| l.trim() == line)
@@ -399,5 +410,10 @@ mod tests {
         assert_eq!(toggle_preset(env, "PROTON_NO_ESYNC=1", true), "FOO=1\nPROTON_NO_NTSYNC=1\nPROTON_NO_ESYNC=1");
         assert_eq!(toggle_preset("", "PROTON_USE_WINED3D=1", true), "PROTON_USE_WINED3D=1");
         assert_eq!(toggle_preset(&toggle_preset(env, "X=1", true), "X=1", true), "FOO=1\nPROTON_NO_NTSYNC=1\nX=1", "no duplicates");
+        assert!(PERF_PRESETS.iter().any(|p| p.0 == "dxvk_async"));
+        assert!(PERF_PRESETS.iter().any(|p| p.0 == "gamescope_fsr"));
+        let with_async = toggle_preset(env, "DXVK_ASYNC=1", true);
+        assert!(preset_on(&with_async, "DXVK_ASYNC=1"));
+        assert_eq!(toggle_preset(&with_async, "DXVK_ASYNC=1", false), env.trim_end());
     }
 }

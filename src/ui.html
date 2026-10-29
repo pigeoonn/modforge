@@ -841,6 +841,15 @@
   .cp-preset input { margin-top: 3px; accent-color: var(--acc); }
   .cp-preset span { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
   .cp-preset code { font-size: 11px; color: var(--text-muted); user-select: text; }
+  .reshade-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .reshade-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--n3); cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+  .reshade-card:hover { border-color: var(--acc); transform: translateY(-1px); }
+  .reshade-card.selected { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 12%, var(--n3)); box-shadow: 0 0 12px color-mix(in srgb, var(--acc) 25%, transparent); }
+  .audio-player-bar { display: flex; flex-direction: column; gap: 8px; padding: 14px 18px; border-radius: 12px; background: color-mix(in srgb, var(--acc) 10%, var(--n3)); border: 1px solid color-mix(in srgb, var(--acc) 30%, var(--line)); }
+  .audio-track-list { display: flex; flex-direction: column; gap: 6px; max-height: calc(52 * var(--vh)); overflow-y: auto; padding-right: 4px; }
+  .audio-track-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--n3); cursor: pointer; transition: all 0.15s ease; }
+  .audio-track-card:hover { border-color: var(--acc); transform: translateY(-1px); }
+  .audio-track-card.playing { border-color: var(--acc); background: color-mix(in srgb, var(--acc) 14%, var(--n3)); box-shadow: 0 0 12px color-mix(in srgb, var(--acc) 25%, transparent); }
   .ts-sub { font-size: 11px; color: var(--text-muted); font-weight: 700; z-index: 2; min-height: 14px; }
   .ts-row { display: flex; align-items: center; gap: 12px; padding: 9px 11px; border-radius: 11px; background: var(--n3); border: 1px solid var(--line); margin-bottom: 7px; }
   .ts-row img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; background: var(--n4); flex: none; }
@@ -1367,6 +1376,7 @@
       <div class="chip-toggle active linux-only" id="chkGamemode" onclick="toggleFlag('gamemode')">🔥 GameMode</div>
       <div class="chip-toggle linux-only" id="chkMangohud" onclick="toggleFlag('mangohud')">📊 MangoHud</div>
       <div class="chip-toggle active" id="chkAutoTrainer" onclick="toggleFlag('auto_trainer')">🤖 Auto Trainer</div>
+      <div class="chip-toggle" id="chkReshade" onclick="openReshadeStudio()" title="ReShade & vkBasalt Graphic Studio">🎨 Shaders</div>
 
       <select class="proton-select" style="display:none;" id="protonSelect" data-dyn onchange="changeProton(this.value)"></select>
       <button class="btn linux-only" style="margin-left:auto;" id="compatBtn" onclick="openCompat()" data-dyn></button>
@@ -1480,6 +1490,7 @@
             <button class="btn tool ue-only" onclick="ipcSend('/api/self_heal')">✨ Self-Heal (Fix UE 5.4 &amp; Crash)</button>
             <button class="btn tool ue-only" onclick="openUe4ssTuner()">🎛 UE4SS Tuner</button>
             <button class="btn tool" onclick="openLaunchModal()">🚀 Launch Options</button>
+            <button class="btn tool" onclick="openReshadeStudio()">🎨 ReShade &amp; Shaders</button>
           </div>
         </div>
         <div class="tool-group">
@@ -1921,6 +1932,28 @@
   </div>
 </div>
 
+<!-- RESHADE & VKBASALT GRAPHIC STUDIO -->
+<div class="modal-backdrop" id="reshadeModal" onclick="if (event.target === this) closeModals()">
+  <div class="glass-card modal-window" style="width:min(760px, calc(95 * var(--vw))); max-height:calc(88 * var(--vh));">
+    <div class="modal-hdr">
+      <span>🎨 ReShade &amp; vkBasalt Graphic Studio</span>
+      <button class="btn" onclick="closeModals()">✕</button>
+    </div>
+    <div id="reshadeBody" data-dyn style="z-index:2; overflow-y:auto; display:flex; flex-direction:column; gap:14px; padding:4px;"></div>
+  </div>
+</div>
+
+<!-- AUDIO & SOUNDTRACK PREVIEWER -->
+<div class="modal-backdrop" id="audioModal" onclick="if (event.target === this) closeModals()">
+  <div class="glass-card modal-window" style="width:min(720px, calc(95 * var(--vw))); max-height:calc(88 * var(--vh));">
+    <div class="modal-hdr">
+      <span id="audioModalTitle">🎵 Audio &amp; Soundtrack Previewer</span>
+      <button class="btn" onclick="closeModals()">✕</button>
+    </div>
+    <div id="audioModalBody" data-dyn style="z-index:2; overflow-y:auto; display:flex; flex-direction:column; gap:12px; padding:4px;"></div>
+  </div>
+</div>
+
 <!-- WHERE SHOULD THIS MOD GO? -->
 <div class="modal-backdrop" id="placeModal">
   <div class="glass-card modal-window" style="width:560px;">
@@ -2099,6 +2132,10 @@
       <button class="btn" style="padding:4px 9px; font-size:11px;" onclick="addChipArg('-vulkan')">-vulkan</button>
       <button class="btn" style="padding:4px 9px; font-size:11px;" onclick="addChipArg('-windowed')">-windowed</button>
       <button class="btn" style="padding:4px 9px; font-size:11px;" onclick="addChipArg('-novid')">-novid</button>
+      <button class="btn" style="padding:4px 9px; font-size:11px;" onclick="addChipArg('-skipintro')">-skipintro</button>
+      <button class="btn" style="padding:4px 9px; font-size:11px;" onclick="addChipEnv('DXVK_ASYNC=1')">⚡ DXVK Async</button>
+      <button class="btn" style="padding:4px 9px; font-size:11px;" onclick="addChipEnv('PROTON_ENABLE_NVAPI=1')">🔍 DLSS/NVAPI</button>
+      <button class="btn" style="padding:4px 9px; font-size:11px;" onclick="addChipEnv('WINE_FULLSCREEN_FSR=1')">🎮 Fullscreen FSR</button>
     </div>
     <input type="text" id="inputArgs" class="input-field" style="z-index:2;" placeholder="Command arguments (e.g. -dx12 -windowed)">
     <textarea id="inputEnv" class="input-field" style="z-index:2;" rows="3" placeholder="Environment variables (e.g. PROTON_ENABLE_NVAPI=1)"></textarea>
@@ -2716,6 +2753,10 @@
     document.getElementById('chkGamemode').classList.toggle('active', appState.gamemode);
     document.getElementById('chkMangohud').classList.toggle('active', appState.mangohud);
     document.getElementById('chkAutoTrainer').classList.toggle('active', appState.auto_trainer);
+    const curG = (appState.games || [])[appState.selected_idx];
+    const hasShaders = curG && curG.env_vars && curG.env_vars.includes('ENABLE_VKBASALT=1');
+    const chkR = document.getElementById('chkReshade');
+    if (chkR) chkR.classList.toggle('active', !!hasShaders);
 
     const pSel = document.getElementById('protonSelect');
     if (pSel.options.length !== appState.protons.length) {
@@ -4495,10 +4536,347 @@
         <div class="cp-note">${escapeHtml(note)}</div>
         <div class="cp-row" style="margin-top:8px"><button class="btn" onclick="ipcSend('/api/ge_download', {}); showToast(t('Downloading the newest GE-Proton… watch the Activity tab.'))">${t('Download the newest GE-Proton')}</button></div>
       </div>
+      ${(d.perf_presets && d.perf_presets.length) ? `<div><div class="cp-h">${t('Performance & Graphics Boosters')}</div>
+        ${d.perf_presets.map(p => `<label class="cp-preset"><input type="checkbox" ${p.on ? 'checked' : ''} onchange="setPreset('${p.id}', this.checked)"><span><b>${escapeHtml(t(p.text))}</b><code>${escapeHtml(p.line)}</code></span></label>`).join('')}
+      </div>` : ''}
       <div><div class="cp-h">${t('Tweaks (when a game will not start or freezes)')}</div>
         ${d.presets.map(p => `<label class="cp-preset"><input type="checkbox" ${p.on ? 'checked' : ''} onchange="setPreset('${p.id}', this.checked)"><span><b>${escapeHtml(t(p.text))}</b><code>${escapeHtml(p.line)}</code></span></label>`).join('')}
         <div class="cp-note">${t('Changes apply the next time the game starts.')}</div>
       </div>`;
+  }
+
+  // ---- ReShade & vkBasalt Graphic Studio ----
+  let currentReshadeData = null;
+  let selectedReshadePreset = 'crisp_cas';
+
+  async function openReshadeStudio() {
+    document.getElementById('reshadeModal').classList.add('open');
+    const body = document.getElementById('reshadeBody');
+    body.innerHTML = `<div class="lib-empty">${t('Checking shader configuration…')}</div>`;
+    await renderReshadeStudio();
+  }
+
+  async function renderReshadeStudio() {
+    let d = null;
+    try {
+      d = await (await fetch('/api/reshade_status')).json();
+    } catch (e) {
+      document.getElementById('reshadeBody').innerHTML = `<div class="lib-empty">${t('Could not load shader settings.')}</div>`;
+      return;
+    }
+    if (!d || d.error) {
+      document.getElementById('reshadeBody').innerHTML = `<div class="lib-empty">${escapeHtml(d ? d.error : t('Select a game first.'))}</div>`;
+      return;
+    }
+    currentReshadeData = d;
+    const st = d.status || {};
+    selectedReshadePreset = st.current_preset || 'crisp_cas';
+    const presets = d.presets || [];
+    const sharpness = typeof st.sharpness === 'number' ? st.sharpness : 0.45;
+    const body = document.getElementById('reshadeBody');
+
+    const statusBadge = st.active
+      ? `<span class="ml-pill good">${t('Active (Running on Launch)')}</span>`
+      : `<span class="ml-pill" style="opacity:0.7">${t('Disabled')}</span>`;
+
+    const backendType = st.has_reshade_dll
+      ? t('DirectX ReShade (dxgi.dll / d3d11.dll)')
+      : t('Vulkan vkBasalt Post-Processing');
+
+    body.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 14px; border-radius:10px; background:var(--n3); border:1px solid var(--line);">
+        <div>
+          <div style="font-weight:700; font-size:14px; margin-bottom:2px;">${t('Post-Processing Pipeline')}</div>
+          <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(backendType)}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${statusBadge}
+          <button class="btn ${st.active ? 'btn-danger' : 'btn-play'}" onclick="toggleReshadeFromStudio()">${st.active ? t('Turn Off') : t('Turn On')}</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="cp-h">${t('Visual Presets')}</div>
+        <div class="reshade-grid">
+          ${presets.map(p => `
+            <div class="reshade-card ${selectedReshadePreset === p.id ? 'selected' : ''}" onclick="selectReshadePreset('${p.id}', ${p.default_sharpness})">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <b style="font-size:13px;">${escapeHtml(p.name)}</b>
+                ${selectedReshadePreset === p.id ? `<span class="ml-pill good" style="font-size:10px;">${t('Selected')}</span>` : ''}
+              </div>
+              <div style="font-size:11.5px; color:var(--text-muted); line-height:1.4;">${escapeHtml(p.description)}</div>
+              ${p.effects && p.effects.length ? `<div style="font-size:10px; color:var(--acc); margin-top:auto;">${escapeHtml(p.effects.join(' + ').toUpperCase())}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="cp-h" style="margin:0;">${t('CAS Texture Sharpening')}</div>
+          <span id="reshadeSharpVal" style="font-weight:700; font-size:13px; color:var(--acc);">${Math.round(sharpness * 100)}%</span>
+        </div>
+        <input type="range" id="reshadeSharpRange" min="0" max="1" step="0.05" value="${sharpness}" style="width:100%; accent-color:var(--acc);" oninput="document.getElementById('reshadeSharpVal').textContent = Math.round(this.value * 100) + '%'">
+        <div class="cp-note">${t('FidelityFX Contrast Adaptive Sharpening restores high-frequency texture details lost to anti-aliasing.')}</div>
+      </div>
+
+      <div>
+        <details style="font-size:12px; color:var(--text-muted);">
+          <summary style="cursor:pointer; font-weight:600; margin-bottom:8px;">${t('View / Edit Raw vkBasalt.conf')}</summary>
+          <textarea id="reshadeCustomConf" style="width:100%; height:120px; font-family:monospace; font-size:11.5px; padding:8px; border-radius:8px; border:1px solid var(--line); background:var(--n4); color:var(--ink);" placeholder="# Custom vkBasalt.conf">${escapeHtml(d.custom_conf || '')}</textarea>
+        </details>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+        <button class="btn" onclick="closeModals()">${t('Cancel')}</button>
+        ${st.active ? `<button class="btn btn-danger" onclick="removeReshade()">${t('Disable & Remove')}</button>` : ''}
+        <button class="btn btn-play" onclick="applyReshadeStudio()">${t('Save & Apply Preset')}</button>
+      </div>
+    `;
+  }
+
+  function selectReshadePreset(id, defSharp) {
+    selectedReshadePreset = id;
+    const r = document.getElementById('reshadeSharpRange');
+    if (r && typeof defSharp === 'number') {
+      r.value = defSharp;
+      const v = document.getElementById('reshadeSharpVal');
+      if (v) v.textContent = Math.round(defSharp * 100) + '%';
+    }
+    document.querySelectorAll('.reshade-card').forEach(c => c.classList.remove('selected'));
+    renderReshadeStudio();
+  }
+
+  async function toggleReshadeFromStudio() {
+    await ipcPost('/api/reshade_toggle', {});
+    setTimeout(renderReshadeStudio, 300);
+  }
+
+  async function applyReshadeStudio() {
+    const sharpness = parseFloat(document.getElementById('reshadeSharpRange')?.value || '0.45');
+    const custom = document.getElementById('reshadeCustomConf')?.value || '';
+    await ipcPost('/api/reshade_apply', {
+      preset: selectedReshadePreset,
+      sharpness: sharpness,
+      custom_conf: selectedReshadePreset === 'custom' ? custom : ''
+    });
+    showToast(t('Applied ReShade / vkBasalt preset.'));
+    closeModals();
+  }
+
+  async function removeReshade() {
+    await ipcPost('/api/reshade_remove', {});
+    showToast(t('Disabled ReShade / vkBasalt.'));
+    closeModals();
+  }
+
+  // ---- Audio & Soundtrack Previewer ----
+  let currentAudioModId = null;
+  let currentAudioTracks = [];
+  let currentAudioIndex = -1;
+  let currentAudioEl = null;
+
+  function stopAudioPreview() {
+    if (currentAudioEl) {
+      try {
+        currentAudioEl.pause();
+        currentAudioEl.src = '';
+      } catch (e) {}
+    }
+    const playBtn = document.getElementById('audioPlayPauseBtn');
+    if (playBtn) playBtn.textContent = '▶';
+    document.querySelectorAll('.audio-track-card').forEach(c => c.classList.remove('playing'));
+  }
+
+  async function openAudioPlayer(modId, modName) {
+    stopAudioPreview();
+    currentAudioModId = modId;
+    currentAudioTracks = [];
+    currentAudioIndex = -1;
+    const titleEl = document.getElementById('audioModalTitle');
+    if (titleEl) titleEl.textContent = `🎵 Audio & Soundtrack — ${modName || 'Mod'}`;
+    document.getElementById('audioModal').classList.add('open');
+    const body = document.getElementById('audioModalBody');
+    body.innerHTML = `<div class="lib-empty">${t('Scanning mod files for audio tracks…')}</div>`;
+
+    let data;
+    try {
+      const res = await fetch(`/api/mod_audio_list?id=${encodeURIComponent(modId)}`);
+      data = await res.json();
+    } catch (e) {
+      body.innerHTML = `<div class="lib-empty">${t('Failed to scan audio tracks.')}</div>`;
+      return;
+    }
+
+    if (!data || !data.tracks || data.tracks.length === 0) {
+      body.innerHTML = `
+        <div class="lib-empty" style="padding:28px 14px; display:flex; flex-direction:column; align-items:center; gap:8px;">
+          <div style="font-size:32px;">🎵</div>
+          <b>${t('No audio tracks found')}</b>
+          <div style="font-size:12px; color:var(--text-muted); max-width:400px; text-align:center;">
+            ${t('This mod staging folder does not contain any audio files (.mp3, .ogg, .wav, .flac, .opus, .aac, .m4a).')}
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    currentAudioTracks = data.tracks;
+    renderAudioPlayer(data.mod_name || modName || 'Mod');
+  }
+
+  function fmtAudioTime(seconds) {
+    if (isNaN(seconds) || seconds < 0) return '00:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+
+  function renderAudioPlayer(modName) {
+    const body = document.getElementById('audioModalBody');
+    body.innerHTML = `
+      <div class="audio-player-bar">
+        <audio id="audioPreviewPlayer" preload="none"></audio>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <div style="min-width:0; flex:1;">
+            <div id="audioNowPlaying" style="font-weight:700; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${t('Ready to play')}
+            </div>
+            <div id="audioTrackSub" style="font-size:11.5px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${currentAudioTracks.length} ${t('audio file(s) available')}
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="btn btn-play" id="audioPlayPauseBtn" style="width:36px; height:36px; border-radius:50%; font-size:14px; padding:0; display:flex; align-items:center; justify-content:center;" onclick="toggleAudioPlay()">▶</button>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-top:4px;">
+          <span id="audioCurrentTime" style="font-size:11px; font-family:monospace; color:var(--text-muted); min-width:38px;">00:00</span>
+          <input type="range" id="audioProgress" min="0" max="100" value="0" step="0.1" style="flex:1; accent-color:var(--acc);" oninput="seekAudio(this.value)">
+          <span id="audioTotalDuration" style="font-size:11px; font-family:monospace; color:var(--text-muted); min-width:38px;">00:00</span>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; align-items:center; gap:6px; font-size:11.5px; color:var(--text-muted);">
+          <span>🔊</span>
+          <input type="range" id="audioVolumeSlider" min="0" max="1" step="0.05" value="0.85" style="width:80px; accent-color:var(--acc);" oninput="setAudioVolume(this.value)">
+        </div>
+      </div>
+
+      <div class="cp-h" style="margin:4px 0 0 0; display:flex; justify-content:space-between; align-items:center;">
+        <span>${t('Soundtrack & Voice Tracks')}</span>
+        <span style="font-weight:normal; font-size:11px; color:var(--text-muted);">${currentAudioTracks.length} files</span>
+      </div>
+
+      <div class="audio-track-list">
+        ${currentAudioTracks.map((tr, idx) => `
+          <div class="audio-track-card" id="audioTrackRow-${idx}" onclick="playAudioTrack(${idx})">
+            <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
+              <span id="audioTrackPlayIcon-${idx}" style="font-size:13px; color:var(--acc); width:16px; text-align:center;">▶</span>
+              <div style="min-width:0; flex:1;">
+                <div style="font-size:12.5px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${escapeHtml(tr.name)}
+                </div>
+                <div style="font-size:10.5px; font-family:monospace; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  ${escapeHtml(tr.path)}
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; flex:none;">
+              <span class="ml-pill" style="font-size:10px; font-weight:700; text-transform:uppercase;">${escapeHtml(tr.ext)}</span>
+              <span style="font-size:11px; color:var(--text-muted);">${fmtBytes(tr.size)}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    currentAudioEl = document.getElementById('audioPreviewPlayer');
+    if (currentAudioEl) {
+      currentAudioEl.volume = 0.85;
+      currentAudioEl.addEventListener('timeupdate', () => {
+        const cur = currentAudioEl.currentTime || 0;
+        const dur = currentAudioEl.duration || 0;
+        const curEl = document.getElementById('audioCurrentTime');
+        const durEl = document.getElementById('audioTotalDuration');
+        const prog = document.getElementById('audioProgress');
+        if (curEl) curEl.textContent = fmtAudioTime(cur);
+        if (durEl && dur > 0) durEl.textContent = fmtAudioTime(dur);
+        if (prog && dur > 0) prog.value = (cur / dur) * 100;
+      });
+      currentAudioEl.addEventListener('ended', () => {
+        if (currentAudioIndex + 1 < currentAudioTracks.length) {
+          playAudioTrack(currentAudioIndex + 1);
+        } else {
+          stopAudioPreview();
+        }
+      });
+      currentAudioEl.addEventListener('error', () => {
+        const nowEl = document.getElementById('audioNowPlaying');
+        if (nowEl) nowEl.textContent = '⚠️ ' + t('Could not play track');
+        const playBtn = document.getElementById('audioPlayPauseBtn');
+        if (playBtn) playBtn.textContent = '▶';
+      });
+    }
+  }
+
+  function playAudioTrack(idx) {
+    if (idx < 0 || idx >= currentAudioTracks.length) return;
+    currentAudioIndex = idx;
+    const tr = currentAudioTracks[idx];
+    if (!currentAudioEl) currentAudioEl = document.getElementById('audioPreviewPlayer');
+    if (!currentAudioEl) return;
+
+    const streamUrl = `/api/mod_audio_stream?id=${encodeURIComponent(currentAudioModId)}&file=${encodeURIComponent(tr.path)}`;
+    currentAudioEl.src = streamUrl;
+    currentAudioEl.play().catch(e => console.warn('Audio play error:', e));
+
+    const playBtn = document.getElementById('audioPlayPauseBtn');
+    if (playBtn) playBtn.textContent = '⏸';
+
+    const nowEl = document.getElementById('audioNowPlaying');
+    if (nowEl) nowEl.textContent = tr.name;
+
+    const subEl = document.getElementById('audioTrackSub');
+    if (subEl) subEl.textContent = tr.path;
+
+    document.querySelectorAll('.audio-track-card').forEach((el, i) => {
+      const isCur = i === idx;
+      el.classList.toggle('playing', isCur);
+      const icon = document.getElementById(`audioTrackPlayIcon-${i}`);
+      if (icon) icon.textContent = isCur ? '⏸' : '▶';
+    });
+  }
+
+  function toggleAudioPlay() {
+    if (!currentAudioEl) return;
+    if (currentAudioEl.paused) {
+      if (currentAudioIndex < 0 && currentAudioTracks.length > 0) {
+        playAudioTrack(0);
+      } else {
+        currentAudioEl.play().catch(e => console.warn('Audio play error:', e));
+        const playBtn = document.getElementById('audioPlayPauseBtn');
+        if (playBtn) playBtn.textContent = '⏸';
+        const icon = document.getElementById(`audioTrackPlayIcon-${currentAudioIndex}`);
+        if (icon) icon.textContent = '⏸';
+      }
+    } else {
+      currentAudioEl.pause();
+      const playBtn = document.getElementById('audioPlayPauseBtn');
+      if (playBtn) playBtn.textContent = '▶';
+      const icon = document.getElementById(`audioTrackPlayIcon-${currentAudioIndex}`);
+      if (icon) icon.textContent = '▶';
+    }
+  }
+
+  function seekAudio(percent) {
+    if (!currentAudioEl || !currentAudioEl.duration) return;
+    currentAudioEl.currentTime = (parseFloat(percent) / 100) * currentAudioEl.duration;
+  }
+
+  function setAudioVolume(vol) {
+    if (!currentAudioEl) return;
+    currentAudioEl.volume = Math.max(0, Math.min(1, parseFloat(vol)));
   }
 
   // ---- backup, disk use and cleanup ----
@@ -4786,7 +5164,10 @@
       const [r, live] = await Promise.all([(await fetch('/api/saves_list')).json(), (await fetch('/api/saves_files')).json()]);
       sgSnaps = r.snapshots || [];
       let h = `<div style="color:var(--text-muted);">${t("ModForge copies this game's save files automatically before every launch, mod update, profile switch and compatibility tool change (only when they changed) and keeps the newest ones. Restoring never deletes anything and first backs up what is there now.")}</div>
-        <div style="margin:10px 0;"><button class="btn btn-heal" onclick="saveGuardBackup()">${t('💾 Back up now')}</button></div>`;
+        <div style="margin:10px 0; display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-heal" onclick="saveGuardBackup()">${t('💾 Back up now')}</button>
+          <button class="btn" onclick="saveGuardCheckpoint()">${t('🏷 Create Checkpoint')}</button>
+        </div>`;
       const files = live.files || [];
       if (files.length) {
         h += `<div class="cp-h" style="margin-top:6px">${t('Your saves')} <span style="color:var(--text-muted); font-weight:normal">· ${tp(files.length, '{} file', '{} files')}</span></div>`;
@@ -4805,8 +5186,12 @@
         }
         sgSnaps.forEach(s => {
           const legacy = s.label === 'legacy';
+          const bloatBadge = s.bloat_warning ? `<span class="ml-pill warn" title="${t('Save size grew dramatically compared to previous backup')}">${t('⚠️ Save Bloat Warning')}</span>` : '';
+          const deltaBadge = (s.delta_bytes && Math.abs(s.delta_bytes) > 1024)
+            ? `<span style="font-size:11px; opacity:0.85; color:${s.delta_bytes > 0 ? 'var(--acc)' : 'var(--text-muted)'}">${s.delta_bytes > 0 ? '+' : ''}${fmtSize(s.delta_bytes)}</span>`
+            : '';
           h += `<div class="cd-card" style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap">
-            <div><b>${escapeHtml(sgWhen(s.at_ms))}</b> <span style="color:var(--text-muted);">· ${escapeHtml(sgLabel(s.label))} · ${tp(s.files, '{} file', '{} files')} · ${fmtSize(s.bytes)}</span></div>
+            <div><b>${escapeHtml(sgWhen(s.at_ms))}</b> <span style="color:var(--text-muted);">· ${escapeHtml(sgLabel(s.label))} · ${tp(s.files, '{} file', '{} files')} · ${fmtSize(s.bytes)}</span> ${deltaBadge} ${bloatBadge}</div>
             <div style="display:flex; gap:6px; flex-wrap:wrap">${legacy ? '' : `<button class="btn" onclick='sgShowFiles(${JS(s.id)})'>${t('Files')}</button><button class="btn" onclick='sgCompare(${JS(s.id)}, "now")'>${t('What changed since')}</button>`}<button class="btn" onclick='saveGuardRestore(${JS(s.id)})'>${t('Restore all')}</button></div></div>`;
         });
       }
@@ -4842,6 +5227,15 @@
 
   async function saveGuardBackup() {
     await ipcPost('/api/saves_backup', {});
+    setTimeout(renderSaveGuard, 600);
+  }
+
+  async function saveGuardCheckpoint() {
+    const raw = prompt(t('Enter checkpoint name (e.g. before-boss, act-two, pre-mod):'), 'checkpoint');
+    if (!raw) return;
+    const clean = raw.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 32);
+    if (!clean) return;
+    await ipcPost('/api/saves_backup', { label: clean });
     setTimeout(renderSaveGuard, 600);
   }
 
@@ -5257,6 +5651,14 @@
     el.value = parts.join(' ');
   }
 
+  function addChipEnv(env) {
+    const el = document.getElementById('inputEnv');
+    const lines = el.value.split('\n').map(l => l.trim()).filter(Boolean);
+    const idx = lines.indexOf(env);
+    if (idx >= 0) lines.splice(idx, 1); else lines.push(env);
+    el.value = lines.join('\n');
+  }
+
   function copySteamCommand() {
     const envs = document.getElementById('inputEnv').value.trim().replace(/\n+/g, ' ');
     const args = document.getElementById('inputArgs').value.trim();
@@ -5275,11 +5677,13 @@
 
   // Esc and the gamepad's B close the window on top only: the mod page opened from the store goes back to the store
   function closeTopModal() {
+    if (typeof stopAudioPreview === 'function') stopAudioPreview();
     const open = [...document.querySelectorAll('.modal-backdrop.open:not(#placeModal):not(#fomodModal)')];
     const top = open.sort((a, b) => (Number(getComputedStyle(a).zIndex) || 0) - (Number(getComputedStyle(b).zIndex) || 0)).pop();
     if (top) top.classList.remove('open');
   }
   function closeModals() {
+    if (typeof stopAudioPreview === 'function') stopAudioPreview();
     document.querySelectorAll('.modal-backdrop:not(#placeModal):not(#fomodModal):not(#importModal)').forEach(m => m.classList.remove('open'));
   }
 
@@ -7149,6 +7553,7 @@
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('About this mod: its page, what changed, what it needs'))}" onclick='openModPage(${JS(m.id)})'>ℹ</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Open staged mod folder in file manager'))}" onclick='ipcSend("/api/open_mod_folder", { id: ${JS(m.id)} })'>📁</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Tweak INI, CFG, JSON, TOML mod configs'))}" onclick='openModConfigStudio(${JS(m.id)}, ${JS(m.name)})'>⚙</button>
+        <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Audio & Soundtrack Previewer'))}" onclick='openAudioPlayer(${JS(m.id)}, ${JS(m.name)})'>🎵</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Add a note to this mod'))}" onclick='modLibNote(${JS(m.id)}, ${JS(m.name)}, ${JS(m.note || '')})'>✎</button>
         ${m.notes > 0 ? `<button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Read the instructions that came with this mod'))}" onclick='openNotes(${JS(m.id)}, ${JS(m.name)})'>📄</button>` : ''}
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Install into another folder of the game')}" onclick='modLibTarget(${JS(m.id)}, ${JS(m.target)})'>📂</button>
