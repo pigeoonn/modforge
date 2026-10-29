@@ -18,8 +18,14 @@ pub struct Layout {
 const LAYOUTS: &[(&str, Layout)] = &[
     ("SkyrimSE.exe", Layout { appdata: "Skyrim Special Edition", base: &["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"] }),
     ("SkyrimVR.exe", Layout { appdata: "Skyrim VR", base: &["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm", "SkyrimVR.esm"] }),
+    ("TESV.exe", Layout { appdata: "Skyrim", base: &["Skyrim.esm", "Update.esm", "Dawnguard.esm", "HearthFires.esm", "Dragonborn.esm"] }),
     ("Fallout4.exe", Layout { appdata: "Fallout4", base: &["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm", "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm"] }),
+    ("Fallout4VR.exe", Layout { appdata: "Fallout4VR", base: &["Fallout4.esm", "DLCRobot.esm", "DLCworkshop01.esm", "DLCCoast.esm", "DLCworkshop02.esm", "DLCworkshop03.esm", "DLCNukaWorld.esm", "Fallout4_VR.esm"] }),
     ("Starfield.exe", Layout { appdata: "Starfield", base: &["Starfield.esm", "Constellation.esm", "OldMars.esm", "BlueprintShips-Starfield.esm"] }),
+    ("FalloutNV.exe", Layout { appdata: "FalloutNV", base: &["FalloutNV.esm", "DeadMoney.esm", "HonestHearts.esm", "OldWorldBlues.esm", "LonesomeRoad.esm", "GunRunnersArsenal.esm", "CaravanPack.esm", "ClassicPack.esm", "MercenaryPack.esm", "TribalPack.esm"] }),
+    ("Fallout3.exe", Layout { appdata: "Fallout3", base: &["Fallout3.esm", "Anchorage.esm", "ThePitt.esm", "BrokenSteel.esm", "PointLookout.esm", "Zeta.esm"] }),
+    ("Oblivion.exe", Layout { appdata: "Oblivion", base: &["Oblivion.esm"] }),
+    ("Morrowind.exe", Layout { appdata: "Morrowind", base: &["Morrowind.esm", "Tribunal.esm", "Bloodmoon.esm"] }),
 ];
 
 /// Which game this is, from the program in its folder.

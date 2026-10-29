@@ -118,6 +118,24 @@ const FALLOUT_4: &[Framework] = &[Framework {
     asset: |n| n.starts_with("f4se_") && (n.ends_with(".7z") || n.ends_with(".zip")),
 }];
 
+const STARFIELD: &[Framework] = &[Framework {
+    name: "SFSE",
+    page: "https://www.nexusmods.com/starfield/mods/106",
+    present: &["sfse_loader.exe"],
+    needs: |f| f.starts_with("data/sfse/plugins/") && f.ends_with(".dll"),
+    repo: "ianpatt/sfse",
+    asset: |n| n.starts_with("sfse_") && (n.ends_with(".7z") || n.ends_with(".zip")),
+}];
+
+const FALLOUT_NV: &[Framework] = &[Framework {
+    name: "xNVSE",
+    page: "https://github.com/xNVSE/NVSE/releases",
+    present: &["nvse_loader.exe"],
+    needs: |f| f.starts_with("data/nvse/plugins/") && f.ends_with(".dll"),
+    repo: "xNVSE/NVSE",
+    asset: |n| n.starts_with("nvse_") && (n.ends_with(".7z") || n.ends_with(".zip")),
+}];
+
 /// Which table fits the game in `game`, by files only that game has.
 fn table_for(game: &Path) -> Option<&'static [Framework]> {
     if has(game, "bin/x64/Cyberpunk2077.exe") {
@@ -126,6 +144,10 @@ fn table_for(game: &Path) -> Option<&'static [Framework]> {
         Some(SKYRIM_SE)
     } else if has(game, "Fallout4.exe") {
         Some(FALLOUT_4)
+    } else if has(game, "Starfield.exe") {
+        Some(STARFIELD)
+    } else if has(game, "FalloutNV.exe") {
+        Some(FALLOUT_NV)
     } else {
         None
     }

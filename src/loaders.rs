@@ -107,6 +107,202 @@ pub fn detect(dir: &Path) -> Option<UnityInfo> {
     Some(UnityInfo { il2cpp, x64, loader: loader.into() })
 }
 
+/// What kind of Godot game a folder holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GodotInfo {
+    pub pck_name: Option<String>,
+    pub loader: String,
+}
+
+/// What the Godot game in `dir` is like, or `None` when it is not a Godot game.
+pub fn detect_godot(dir: &Path) -> Option<GodotInfo> {
+    let has_project_file = exists_ci(dir, "project.godot").is_some()
+        || exists_ci(dir, "engine.cfg").is_some()
+        || exists_ci(dir, "project.binary").is_some();
+
+    let pck = fs::read_dir(dir).ok()?.flatten().find_map(|e| {
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.to_lowercase().ends_with(".pck") {
+            Some(name)
+        } else {
+            None
+        }
+    });
+
+    if !has_project_file && pck.is_none() {
+        return None;
+    }
+
+    let loader = if exists_ci(dir, "GDWeave").map(|p| p.is_dir()).unwrap_or(false)
+        || (exists_ci(dir, "winmm.dll").is_some() && dir.join("GDWeave").is_dir())
+    {
+        "gdweave"
+    } else if exists_ci(dir, "mods").map(|p| p.is_dir()).unwrap_or(false) {
+        "godotmodloader"
+    } else {
+        ""
+    };
+
+    Some(GodotInfo {
+        pck_name: pck,
+        loader: loader.into(),
+    })
+}
+
+/// What kind of Bethesda Creation / Gamebryo game a folder holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BethesdaInfo {
+    pub game: &'static str,
+    pub loader: String,
+}
+
+/// What the Bethesda game in `dir` is like, or `None` when it is not a Bethesda game.
+pub fn detect_bethesda(dir: &Path) -> Option<BethesdaInfo> {
+    let check_exe = |name: &str| exists_ci(dir, name).is_some();
+
+    let game = if check_exe("SkyrimSE.exe") {
+        "Skyrim Special Edition"
+    } else if check_exe("SkyrimVR.exe") {
+        "Skyrim VR"
+    } else if check_exe("TESV.exe") {
+        "The Elder Scrolls V: Skyrim"
+    } else if check_exe("Fallout4.exe") {
+        "Fallout 4"
+    } else if check_exe("Fallout4VR.exe") {
+        "Fallout 4 VR"
+    } else if check_exe("Starfield.exe") {
+        "Starfield"
+    } else if check_exe("FalloutNV.exe") {
+        "Fallout: New Vegas"
+    } else if check_exe("Fallout3.exe") {
+        "Fallout 3"
+    } else if check_exe("Oblivion.exe") {
+        "The Elder Scrolls IV: Oblivion"
+    } else if check_exe("Morrowind.exe") {
+        "The Elder Scrolls III: Morrowind"
+    } else {
+        let data = dir.join("Data");
+        if data.is_dir() {
+            let has_plugins = fs::read_dir(&data).ok()?.flatten().any(|e| {
+                let name = e.file_name().to_string_lossy().to_lowercase();
+                name.ends_with(".esm")
+                    || name.ends_with(".esp")
+                    || name.ends_with(".esl")
+                    || name.ends_with(".ba2")
+                    || name.ends_with(".bsa")
+            });
+            if has_plugins {
+                "Bethesda Game"
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    };
+
+    let loader = if check_exe("skse64_loader.exe")
+        || exists_ci(dir, "skse64_steam_loader.dll").is_some()
+        || dir.join("Data/SKSE/Plugins").is_dir()
+    {
+        "skse64"
+    } else if check_exe("f4se_loader.exe")
+        || exists_ci(dir, "f4se_steam_loader.dll").is_some()
+        || dir.join("Data/F4SE/Plugins").is_dir()
+    {
+        "f4se"
+    } else if check_exe("sfse_loader.exe") || exists_ci(dir, "sfse_steam_loader.dll").is_some() {
+        "sfse"
+    } else if check_exe("nvse_loader.exe") || exists_ci(dir, "nvse_steam_loader.dll").is_some() {
+        "nvse"
+    } else if check_exe("obse_loader.exe") || exists_ci(dir, "obse_steam_loader.dll").is_some() {
+        "obse"
+    } else if check_exe("skse_loader.exe") || exists_ci(dir, "skse_steam_loader.dll").is_some() {
+        "skse"
+    } else {
+        ""
+    };
+
+    Some(BethesdaInfo {
+        game,
+        loader: loader.into(),
+    })
+}
+
+/// What kind of Source / GoldSrc game a folder holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceInfo {
+    pub game_dir_name: String,
+    pub loader: String,
+    pub is_goldsrc: bool,
+}
+
+/// What the Source/GoldSrc game in `dir` is like, or `None` when it is not a Source/GoldSrc game.
+pub fn detect_source(dir: &Path) -> Option<SourceInfo> {
+    let check_exe = |name: &str| exists_ci(dir, name).is_some();
+    let is_goldsrc = check_exe("hl.exe");
+
+    let mut game_subfolder = String::new();
+    let mut is_source = check_exe("hl2.exe")
+        || check_exe("portal2.exe")
+        || check_exe("left4dead2.exe")
+        || check_exe("csgo.exe")
+        || check_exe("bms.exe");
+
+    if let Ok(rd) = fs::read_dir(dir) {
+        for entry in rd.flatten() {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                let p = entry.path();
+                if p.join("gameinfo.txt").is_file() {
+                    is_source = true;
+                    game_subfolder = entry.file_name().to_string_lossy().to_string();
+                    break;
+                } else if p.join("liblist.gam").is_file() {
+                    game_subfolder = entry.file_name().to_string_lossy().to_string();
+                    break;
+                }
+            }
+        }
+    }
+
+    if !is_source && !is_goldsrc && game_subfolder.is_empty() {
+        return None;
+    }
+
+    if game_subfolder.is_empty() {
+        if check_exe("left4dead2.exe") && dir.join("left4dead2").is_dir() {
+            game_subfolder = "left4dead2".to_string();
+        } else if check_exe("portal2.exe") && dir.join("portal2").is_dir() {
+            game_subfolder = "portal2".to_string();
+        } else if check_exe("csgo.exe") && dir.join("csgo").is_dir() {
+            game_subfolder = "csgo".to_string();
+        } else if dir.join("hl2").is_dir() {
+            game_subfolder = "hl2".to_string();
+        } else if dir.join("valve").is_dir() {
+            game_subfolder = "valve".to_string();
+        }
+    }
+
+    let loader = if !game_subfolder.is_empty() {
+        let addons = dir.join(&game_subfolder).join("addons");
+        if addons.join("sourcemod").is_dir() {
+            "sourcemod"
+        } else if addons.join("metamod").is_dir() {
+            "metamod"
+        } else {
+            ""
+        }
+    } else {
+        ""
+    };
+
+    Some(SourceInfo {
+        game_dir_name: game_subfolder,
+        loader: loader.into(),
+        is_goldsrc,
+    })
+}
+
 // ───────────────────────────── where to get them ─────────────────────────────
 
 #[derive(Clone, Debug)]
@@ -358,5 +554,75 @@ mod tests {
         assert_eq!(a.version, "6.0.0-be.789");
         assert!(pick_be_build(html, "https://builds.bepinex.dev", false, false).is_none(), "no 32-bit Mono build listed");
         assert!(name_ok(&a.name));
+    }
+
+    #[test]
+    fn godot_games_are_detected_with_pck_and_loaders() {
+        let d = TempDir::new("godot");
+        let root = d.join("Brotato");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("Brotato.exe"), pe(0x8664)).unwrap();
+        fs::write(root.join("Brotato.pck"), b"GDPCK").unwrap();
+
+        let info = detect_godot(&root).expect("should detect godot");
+        assert_eq!(info.pck_name, Some("Brotato.pck".into()));
+        assert_eq!(info.loader, "");
+
+        // GodotModLoader
+        fs::create_dir_all(root.join("mods")).unwrap();
+        assert_eq!(detect_godot(&root).unwrap().loader, "godotmodloader");
+
+        // GDWeave loader takes precedence if present
+        fs::create_dir_all(root.join("GDWeave/mods")).unwrap();
+        assert_eq!(detect_godot(&root).unwrap().loader, "gdweave");
+    }
+
+    #[test]
+    fn bethesda_games_and_script_extenders_are_detected() {
+        let d = TempDir::new("bethesda");
+        let skyrim = d.join("SkyrimSE");
+        fs::create_dir_all(skyrim.join("Data")).unwrap();
+        fs::write(skyrim.join("SkyrimSE.exe"), pe(0x8664)).unwrap();
+        fs::write(skyrim.join("Data/Skyrim.esm"), b"TES4").unwrap();
+
+        let info = detect_bethesda(&skyrim).expect("should detect Skyrim");
+        assert_eq!(info.game, "Skyrim Special Edition");
+        assert_eq!(info.loader, "");
+
+        fs::write(skyrim.join("skse64_loader.exe"), pe(0x8664)).unwrap();
+        assert_eq!(detect_bethesda(&skyrim).unwrap().loader, "skse64");
+
+        let fnv = d.join("FalloutNV");
+        fs::create_dir_all(fnv.join("Data")).unwrap();
+        fs::write(fnv.join("FalloutNV.exe"), pe(0x014c)).unwrap();
+        fs::write(fnv.join("nvse_loader.exe"), pe(0x014c)).unwrap();
+        let fnv_info = detect_bethesda(&fnv).expect("should detect FNV");
+        assert_eq!(fnv_info.game, "Fallout: New Vegas");
+        assert_eq!(fnv_info.loader, "nvse");
+    }
+
+    #[test]
+    fn source_games_and_sourcemod_are_detected() {
+        let d = TempDir::new("source");
+        let hl2 = d.join("Half-Life 2");
+        fs::create_dir_all(hl2.join("hl2")).unwrap();
+        fs::write(hl2.join("hl2.exe"), pe(0x014c)).unwrap();
+        fs::write(hl2.join("hl2/gameinfo.txt"), b"GameInfo { game \"Half-Life 2\" }").unwrap();
+
+        let info = detect_source(&hl2).expect("should detect Source engine");
+        assert_eq!(info.game_dir_name, "hl2");
+        assert!(!info.is_goldsrc);
+        assert_eq!(info.loader, "");
+
+        fs::create_dir_all(hl2.join("hl2/addons/sourcemod")).unwrap();
+        assert_eq!(detect_source(&hl2).unwrap().loader, "sourcemod");
+
+        let gsrc = d.join("Half-Life 1");
+        fs::create_dir_all(gsrc.join("valve")).unwrap();
+        fs::write(gsrc.join("hl.exe"), pe(0x014c)).unwrap();
+        fs::write(gsrc.join("valve/liblist.gam"), b"game \"Half-Life\"").unwrap();
+        let ginfo = detect_source(&gsrc).expect("should detect GoldSrc");
+        assert_eq!(ginfo.game_dir_name, "valve");
+        assert!(ginfo.is_goldsrc);
     }
 }

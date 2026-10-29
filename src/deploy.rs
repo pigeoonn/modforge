@@ -38,6 +38,7 @@ fn lock() -> MutexGuard<'static, ()> {
 const PROXY_DLLS: &[&str] = &[
     "dinput8", "version", "winmm", "winhttp", "d3d8", "d3d9", "d3d10", "d3d11", "dxgi", "xinput1_3",
     "xinput1_4", "xinput9_1_0", "dsound", "dwmapi", "opengl32", "ddraw", "wininet", "msimg32", "iphlpapi",
+    "bink2w64", "binkw64", "binkw32",
 ];
 
 const ANTI_CHEAT: &[(&str, &str)] = &[
@@ -830,6 +831,24 @@ impl Library {
         // zipped as `red4ext/plugins/...` must not lose its `red4ext`)
         let cyberpunk = self.exists_ci(Path::new("bin/x64"), "Cyberpunk2077.exe");
         let cyberpunk_dir = |n: &str| ["red4ext", "r6", "engine", "bin", "archive", "mods"].contains(&n.to_lowercase().as_str());
+
+        // Bethesda games (Skyrim, Fallout, Starfield, Oblivion, etc.)
+        let bethesda = crate::loaders::detect_bethesda(&self.game_dir).is_some() || self.exists_ci(Path::new(""), "Data");
+        let bethesda_dir = |n: &str| ["data", "meshes", "textures", "scripts", "sound", "music", "interface", "skse", "f4se", "sfse", "strings", "seq", "shadersfx", "materials"].contains(&n.to_lowercase().as_str());
+
+        // Godot games
+        let godot = crate::loaders::detect_godot(&self.game_dir).is_some();
+        let godot_dir = |n: &str| ["gdweave", "mods"].contains(&n.to_lowercase().as_str());
+
+        // Source / GoldSrc games
+        let source_info = crate::loaders::detect_source(&self.game_dir);
+        let has_source = source_info.is_some();
+        let source_dir = |n: &str| {
+            let low = n.to_lowercase();
+            ["custom", "addons", "materials", "models", "sound", "maps", "resource", "scripts", "cfg"].contains(&low.as_str())
+                || source_info.as_ref().map(|s| s.game_dir_name.eq_ignore_ascii_case(n)).unwrap_or(false)
+        };
+
         let mut strip = 0usize;
         loop {
             let mut tops: BTreeSet<String> = BTreeSet::new();
@@ -844,7 +863,14 @@ impl Library {
             }
             if strip < 4 && tops.len() == 1 && !loose {
                 let top = tops.iter().next().expect("one element").clone();
-                if self.exists_ci(Path::new(""), &top) || self.find_parent_of(&top).is_some() || (has_bepinex && bepinex_dir(&top)) || (cyberpunk && cyberpunk_dir(&top)) {
+                if self.exists_ci(Path::new(""), &top)
+                    || self.find_parent_of(&top).is_some()
+                    || (has_bepinex && bepinex_dir(&top))
+                    || (cyberpunk && cyberpunk_dir(&top))
+                    || (bethesda && bethesda_dir(&top))
+                    || (godot && godot_dir(&top))
+                    || (has_source && source_dir(&top))
+                {
                     break; // a real game folder, keep it
                 }
                 strip += 1; // a wrapper folder named after the mod
@@ -883,6 +909,53 @@ impl Library {
                 target = "BepInEx".into();
             } else if top_dirs.is_empty() && loose_dll {
                 target = "BepInEx/plugins".into();
+            }
+        }
+        // Bethesda games: loose plugins or asset folders belong in Data/
+        if target.is_empty() && bethesda {
+            let lower = |c: &std::path::Component| c.as_os_str().to_string_lossy().to_lowercase();
+            let top_dirs: BTreeSet<String> = files.iter().filter_map(|f| f.components().nth(strip + 1).map(|_| lower(&f.components().nth(strip).unwrap()))).collect();
+            let ext = |f: &PathBuf| f.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let has_bethesda_plugins = files.iter().any(|f| f.components().count() == strip + 1 && ["esp", "esm", "esl", "ba2", "bsa"].contains(&ext(f).as_str()));
+            let has_bethesda_subdirs = ["meshes", "textures", "scripts", "sound", "music", "interface", "skse", "f4se", "sfse", "strings", "seq", "shadersfx", "materials"].iter().any(|d| top_dirs.contains(*d));
+            if top_dirs.contains("data") {
+                // already laid out from root with Data/
+            } else if has_bethesda_plugins || has_bethesda_subdirs {
+                target = "Data".into();
+            }
+        }
+        // Godot games: loose .pck files or GDWeave mods
+        if target.is_empty() && godot {
+            let lower = |c: &std::path::Component| c.as_os_str().to_string_lossy().to_lowercase();
+            let top_dirs: BTreeSet<String> = files.iter().filter_map(|f| f.components().nth(strip + 1).map(|_| lower(&f.components().nth(strip).unwrap()))).collect();
+            let ext = |f: &PathBuf| f.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let loose_pck = files.iter().any(|f| f.components().count() == strip + 1 && ext(f) == "pck");
+            if top_dirs.contains("gdweave") || top_dirs.contains("mods") {
+                // already laid out
+            } else if loose_pck {
+                if self.exists_ci(Path::new(""), "mods") {
+                    target = "mods".into();
+                }
+            }
+        }
+        // Source games: .vpk files or custom assets belong in <game>/custom (or <game>/addons for L4D2)
+        if target.is_empty() {
+            if let Some(ref s) = source_info {
+                let gname = &s.game_dir_name;
+                if !gname.is_empty() {
+                    let ext = |f: &PathBuf| f.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+                    let loose_vpk = files.iter().any(|f| f.components().count() == strip + 1 && ext(f) == "vpk");
+                    let lower = |c: &std::path::Component| c.as_os_str().to_string_lossy().to_lowercase();
+                    let top_dirs: BTreeSet<String> = files.iter().filter_map(|f| f.components().nth(strip + 1).map(|_| lower(&f.components().nth(strip).unwrap()))).collect();
+                    let is_custom_assets = ["materials", "models", "sound", "maps", "resource", "scripts"].iter().any(|d| top_dirs.contains(*d));
+
+                    let subtarget = if gname.eq_ignore_ascii_case("left4dead2") { "addons" } else { "custom" };
+                    if top_dirs.contains(&gname.to_lowercase()) {
+                        // already rooted with game directory
+                    } else if loose_vpk || is_custom_assets {
+                        target = format!("{}/{}", gname, subtarget);
+                    }
+                }
             }
         }
         // Unreal games: loose PAK files belong in Content/Paks/~mods (LogicMods for UI/logic paks)
@@ -2680,6 +2753,67 @@ mod tests {
         let (d2, _g2, lib2) = setup("nopak");
         assert!(lib2.find_paks_rel().is_none());
         assert_eq!(lib2.add_from_dir(&stage(&d2, "a", &[("Cool_P.pak", "P")]), "Cool", "c.zip").unwrap().target, "");
+    }
+
+    #[test]
+    fn bethesda_plugins_and_assets_target_data_folder() {
+        let d = TempDir::new("bethesda_deploy");
+        let game = d.join("Skyrim Special Edition");
+        write(&game.join("SkyrimSE.exe"), "MZ");
+        write(&game.join("Data/Skyrim.esm"), "BASE");
+        let lib = Library::locate(&game, &d.join("data"), "skyrim");
+
+        // Loose .esp mod should target Data
+        let s1 = stage(&d, "esp_mod", &[("MySword.esp", "ESP"), ("MySword.bsa", "BSA")]);
+        let m1 = lib.add_from_dir(&s1, "MySword", "sword.zip").unwrap();
+        assert_eq!(m1.target, "Data");
+
+        // Mod with meshes/textures folders should target Data
+        let s2 = stage(&d, "texture_mod", &[("textures/weapons/sword.dds", "DDS"), ("meshes/weapons/sword.nif", "NIF")]);
+        let m2 = lib.add_from_dir(&s2, "SwordTextures", "textures.zip").unwrap();
+        assert_eq!(m2.target, "Data");
+
+        // Mod already rooted in Data should keep target empty (relative to root)
+        let s3 = stage(&d, "full_mod", &[("Data/Another.esp", "ESP")]);
+        let m3 = lib.add_from_dir(&s3, "FullMod", "full.zip").unwrap();
+        assert_eq!(m3.target, "");
+    }
+
+    #[test]
+    fn godot_pck_mods_target_mods_folder() {
+        let d = TempDir::new("godot_deploy");
+        let game = d.join("Brotato");
+        write(&game.join("Brotato.exe"), "MZ");
+        write(&game.join("Brotato.pck"), "PCK");
+        write(&game.join("mods/base.txt"), "BASE");
+        let lib = Library::locate(&game, &d.join("data"), "brotato");
+
+        let s1 = stage(&d, "pck_mod", &[("CoolMod.pck", "PCK")]);
+        let m1 = lib.add_from_dir(&s1, "CoolMod", "cool.zip").unwrap();
+        assert_eq!(m1.target, "mods");
+    }
+
+    #[test]
+    fn source_vpk_and_custom_assets_target_custom_or_addons() {
+        let d = TempDir::new("source_deploy");
+        let hl2 = d.join("Half-Life 2");
+        write(&hl2.join("hl2.exe"), "MZ");
+        write(&hl2.join("hl2/gameinfo.txt"), "GameInfo");
+        write(&hl2.join("hl2/custom/readme.txt"), "Custom");
+        let lib_hl2 = Library::locate(&hl2, &d.join("data"), "hl2");
+
+        let s1 = stage(&d, "vpk_mod", &[("skins.vpk", "VPK")]);
+        let m1 = lib_hl2.add_from_dir(&s1, "Skins", "skins.zip").unwrap();
+        assert_eq!(m1.target, "hl2/custom");
+
+        let l4d2 = d.join("Left 4 Dead 2");
+        write(&l4d2.join("left4dead2.exe"), "MZ");
+        write(&l4d2.join("left4dead2/gameinfo.txt"), "GameInfo");
+        let lib_l4d2 = Library::locate(&l4d2, &d.join("data"), "l4d2");
+
+        let s2 = stage(&d, "campaign_vpk", &[("campaign.vpk", "VPK")]);
+        let m2 = lib_l4d2.add_from_dir(&s2, "Campaign", "camp.zip").unwrap();
+        assert_eq!(m2.target, "left4dead2/addons");
     }
 
     #[test]

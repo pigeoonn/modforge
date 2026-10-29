@@ -130,17 +130,36 @@ impl GameEntry {
         }
     }
 
-    /// Re-check things that change when the user installs or removes UE4SS.
+    /// Re-check things that change when the user installs or removes mod loaders or tools.
     pub fn refresh_flags(&mut self) {
         self.ue4ss = RigEngine::find_ue_bin_dir(Path::new(&self.game_dir)).map(|ub| ue4ss_installed_in(&ub)).unwrap_or(false);
-        if self.engine == "Standard / Non-UE" && self.is_installed && !self.game_dir.is_empty() && crate::loaders::detect(Path::new(&self.game_dir)).is_some() {
-            self.engine = "Unity".into(); // games from other launchers are not engine-checked when they are listed
-        }
-        self.loader = if self.engine == "Unity" {
-            crate::loaders::detect(Path::new(&self.game_dir)).map(|u| if u.loader.is_empty() { "none".to_string() } else { u.loader }).unwrap_or_default()
+        if self.is_installed && !self.game_dir.is_empty() {
+            let p = Path::new(&self.game_dir);
+            if self.engine == "Standard / Non-UE" {
+                if crate::loaders::detect(p).is_some() {
+                    self.engine = "Unity".into();
+                } else if let Some(b) = crate::loaders::detect_bethesda(p) {
+                    self.engine = format!("Bethesda ({})", b.game);
+                } else if let Some(s) = crate::loaders::detect_source(p) {
+                    self.engine = if s.is_goldsrc { "GoldSrc".into() } else { "Source Engine".into() };
+                } else if crate::loaders::detect_godot(p).is_some() {
+                    self.engine = "Godot".into();
+                }
+            }
+            self.loader = if self.engine == "Unity" {
+                crate::loaders::detect(p).map(|u| if u.loader.is_empty() { "none".to_string() } else { u.loader }).unwrap_or_default()
+            } else if self.engine.starts_with("Bethesda") {
+                crate::loaders::detect_bethesda(p).map(|b| if b.loader.is_empty() { "none".to_string() } else { b.loader }).unwrap_or_default()
+            } else if self.engine == "Source Engine" || self.engine == "GoldSrc" {
+                crate::loaders::detect_source(p).map(|s| if s.loader.is_empty() { "none".to_string() } else { s.loader }).unwrap_or_default()
+            } else if self.engine == "Godot" {
+                crate::loaders::detect_godot(p).map(|g| if g.loader.is_empty() { "none".to_string() } else { g.loader }).unwrap_or_default()
+            } else {
+                String::new()
+            };
         } else {
-            String::new()
-        };
+            self.loader = String::new();
+        }
     }
 
     /// Launched by rig itself (own Proton/Wine process) rather than handed to Steam.
@@ -612,6 +631,14 @@ impl RigEngine {
             if let Some(sh) = Self::find_shipping_exe(&ub) {
                 shipping_exe = sh.to_string_lossy().to_string();
             }
+        } else if game_dir.join("UnityPlayer.dll").is_file() || crate::loaders::detect(&game_dir).is_some() {
+            engine = "Unity".to_string();
+        } else if let Some(b) = crate::loaders::detect_bethesda(&game_dir) {
+            engine = format!("Bethesda ({})", b.game);
+        } else if let Some(s) = crate::loaders::detect_source(&game_dir) {
+            engine = if s.is_goldsrc { "GoldSrc".to_string() } else { "Source Engine".to_string() };
+        } else if crate::loaders::detect_godot(&game_dir).is_some() {
+            engine = "Godot".to_string();
         }
 
         let stem = exe_path.file_stem()?.to_string_lossy().to_string();
@@ -716,8 +743,14 @@ impl RigEngine {
                     if let Some(sh) = Self::find_shipping_exe(&ub) {
                         shipping_exe = sh.to_string_lossy().to_string();
                     }
-                } else if gdir.join("UnityPlayer.dll").is_file() {
+                } else if gdir.join("UnityPlayer.dll").is_file() || crate::loaders::detect(&gdir).is_some() {
                     engine = "Unity".to_string();
+                } else if let Some(b) = crate::loaders::detect_bethesda(&gdir) {
+                    engine = format!("Bethesda ({})", b.game);
+                } else if let Some(s) = crate::loaders::detect_source(&gdir) {
+                    engine = if s.is_goldsrc { "GoldSrc".to_string() } else { "Source Engine".to_string() };
+                } else if crate::loaders::detect_godot(&gdir).is_some() {
+                    engine = "Godot".to_string();
                 }
             }
 
@@ -751,7 +784,7 @@ impl RigEngine {
                     trainer_name,
                     mod_count: 0, source: String::new(), proton_path: String::new(), ue4ss: false, loader: String::new(), cover_id: String::new(),
             };
-            if is_installed && (entry.engine.starts_with("Unreal") || entry.engine == "Unity") {
+            if is_installed && (entry.engine.starts_with("Unreal") || entry.engine == "Unity" || entry.engine.starts_with("Bethesda") || entry.engine == "Godot" || entry.engine == "Source Engine" || entry.engine == "GoldSrc") {
                 entry.mod_count = ModManager::list_mods(&entry).len();
                 entry.refresh_flags();
             }
@@ -780,6 +813,14 @@ impl RigEngine {
                             if let Some(sh) = Self::find_shipping_exe(&ub) {
                                 cg.shipping_exe = sh.to_string_lossy().to_string();
                             }
+                        } else if gpath.join("UnityPlayer.dll").is_file() || crate::loaders::detect(&gpath).is_some() {
+                            cg.engine = "Unity".to_string();
+                        } else if let Some(b) = crate::loaders::detect_bethesda(&gpath) {
+                            cg.engine = format!("Bethesda ({})", b.game);
+                        } else if let Some(s) = crate::loaders::detect_source(&gpath) {
+                            cg.engine = if s.is_goldsrc { "GoldSrc".to_string() } else { "Source Engine".to_string() };
+                        } else if crate::loaders::detect_godot(&gpath).is_some() {
+                            cg.engine = "Godot".to_string();
                         }
                     }
                     if let Some(lopts) = cfg.launch_options.get(&cg.appid) {
@@ -1071,5 +1112,113 @@ mod tests {
         assert_ne!(a.appid, b.appid);
         assert_eq!(a.name, "My Game");
         assert!(RigEngine::resolve_executable(&d.join("none.exe")).is_none());
+    }
+
+    #[test]
+    fn refresh_flags_recognizes_godot_bethesda_source_and_loaders() {
+        let d = TempDir::new("flags_test");
+
+        // Godot game with GDWeave
+        let godot_dir = d.join("GodotGame");
+        fs::create_dir_all(godot_dir.join("GDWeave/mods")).unwrap();
+        fs::write(godot_dir.join("game.exe"), b"MZ").unwrap();
+        fs::write(godot_dir.join("game.pck"), b"GDPCK").unwrap();
+
+        let mut g_entry = GameEntry {
+            appid: "godot_1".into(),
+            name: "Godot Game".into(),
+            game_dir: godot_dir.to_string_lossy().into(),
+            exe_path: String::new(),
+            shipping_exe: String::new(),
+            bin_dir: String::new(),
+            engine: default_engine(),
+            compatdata: String::new(),
+            pfx: String::new(),
+            has_pfx: false,
+            is_custom: true,
+            is_installed: true,
+            steam_appid: String::new(),
+            launch_args: String::new(),
+            env_vars: String::new(),
+            trainer_name: String::new(),
+            mod_count: 0,
+            source: String::new(),
+            proton_path: String::new(),
+            ue4ss: false,
+            loader: String::new(),
+            cover_id: String::new(),
+        };
+        g_entry.refresh_flags();
+        assert_eq!(g_entry.engine, "Godot");
+        assert_eq!(g_entry.loader, "gdweave");
+
+        // Bethesda Skyrim game with SKSE64
+        let skyrim_dir = d.join("SkyrimGame");
+        fs::create_dir_all(skyrim_dir.join("Data")).unwrap();
+        fs::write(skyrim_dir.join("SkyrimSE.exe"), b"MZ").unwrap();
+        fs::write(skyrim_dir.join("skse64_loader.exe"), b"MZ").unwrap();
+        fs::write(skyrim_dir.join("Data/Skyrim.esm"), b"TES4").unwrap();
+
+        let mut b_entry = GameEntry {
+            appid: "skyrim_1".into(),
+            name: "Skyrim SE".into(),
+            game_dir: skyrim_dir.to_string_lossy().into(),
+            exe_path: String::new(),
+            shipping_exe: String::new(),
+            bin_dir: String::new(),
+            engine: default_engine(),
+            compatdata: String::new(),
+            pfx: String::new(),
+            has_pfx: false,
+            is_custom: true,
+            is_installed: true,
+            steam_appid: String::new(),
+            launch_args: String::new(),
+            env_vars: String::new(),
+            trainer_name: String::new(),
+            mod_count: 0,
+            source: String::new(),
+            proton_path: String::new(),
+            ue4ss: false,
+            loader: String::new(),
+            cover_id: String::new(),
+        };
+        b_entry.refresh_flags();
+        assert_eq!(b_entry.engine, "Bethesda (Skyrim Special Edition)");
+        assert_eq!(b_entry.loader, "skse64");
+
+        // Source game with sourcemod
+        let hl2_dir = d.join("HL2Game");
+        fs::create_dir_all(hl2_dir.join("hl2/addons/sourcemod")).unwrap();
+        fs::write(hl2_dir.join("hl2.exe"), b"MZ").unwrap();
+        fs::write(hl2_dir.join("hl2/gameinfo.txt"), b"GameInfo").unwrap();
+
+        let mut s_entry = GameEntry {
+            appid: "hl2_1".into(),
+            name: "Half-Life 2".into(),
+            game_dir: hl2_dir.to_string_lossy().into(),
+            exe_path: String::new(),
+            shipping_exe: String::new(),
+            bin_dir: String::new(),
+            engine: default_engine(),
+            compatdata: String::new(),
+            pfx: String::new(),
+            has_pfx: false,
+            is_custom: true,
+            is_installed: true,
+            steam_appid: String::new(),
+            launch_args: String::new(),
+            env_vars: String::new(),
+            trainer_name: String::new(),
+            mod_count: 0,
+            source: String::new(),
+            proton_path: String::new(),
+            ue4ss: false,
+            loader: String::new(),
+            cover_id: String::new(),
+        };
+        s_entry.refresh_flags();
+        assert_eq!(s_entry.engine, "Source Engine");
+        assert_eq!(s_entry.loader, "sourcemod");
     }
 }
