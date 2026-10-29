@@ -884,7 +884,7 @@
   .hb-line.warn { border-color: rgba(240,180,76,0.4); } .hb-line.warn .hb-dot { background: var(--accent-amber); }
   .hb-line.bad { border-color: rgba(242,112,107,0.5); background: rgba(242,112,107,0.07); } .hb-line.bad .hb-dot { background: var(--accent-red); animation: ping 2s ease-out infinite; }
   .hb-line.info .hb-dot { background: var(--accent-cyan); }
-  #vanillaBar { flex-direction: row; align-items: center; gap: 10px; padding: 9px 13px; border-radius: 11px; border: 1px solid var(--line); background: var(--n3); font-size: 12.5px; font-weight: 600; }
+  #vanillaBar, #safeModeBar { flex-direction: row; align-items: center; gap: 10px; padding: 9px 13px; border-radius: 11px; border: 1px solid var(--line); background: var(--n3); font-size: 12.5px; font-weight: 600; }
   .hchip { width: 16px; height: 16px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 800; color: #1a1100; }
   .hchip.warn { background: var(--accent-amber); } .hchip.bad { background: var(--accent-red); color: var(--ink); }
   .health-bar .hb-text { flex: 1; min-width: 220px; }
@@ -1379,6 +1379,7 @@
       <div class="health-bar info" id="nxQueueBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="inboxBar" data-dyn style="display:none"></div>
       <div class="health-bar info" id="vanillaBar" style="display:none"><span class="hb-dot"></span><span class="hb-text">Playing without mods. They come back when you close the game.</span></div>
+      <div class="health-bar info" id="safeModeBar" style="display:none"><span class="hb-dot"></span><span class="hb-text">🛡 Playing in Safe Mode (core loaders active, content mods paused). Mods return when you close the game.</span></div>
     <div class="drop-zone slim" onclick="ipcSend('/api/install_dialog')">
       <div class="drop-title">⬇ DRAG & DROP FILES ANYWHERE OR CLICK TO BROWSE (.ZIP / .7Z / .RAR / .PAK / .DLL / .EXE)</div>
       <div class="drop-sub" id="dropSub">Multi-Extractor (7z / bsdtar / unzip / unrar) + inotify Live Sync: Routes LogicMods, ~mods, Lua & Trainers!</div>
@@ -1445,7 +1446,7 @@
           </label>
           <div style="display:flex; gap:8px; align-items:center; z-index:2; width:100%;">
             <input type="text" id="mlFilter" class="mod-filter-input" style="flex:1; margin:0;" placeholder="Filter mods…" oninput="renderModLib()" autocomplete="off">
-            <select id="mlSort" class="proton-select" style="padding:4px 8px; font-size:11px;" onchange="renderModLib()" title="Sort library view">
+            <select id="mlSort" class="proton-select" style="padding:4px 8px; font-size:11px;" onchange="try{localStorage.setItem('modforge_ml_sort', this.value)}catch(e){} renderModLib()" title="Sort library view">
               <option value="prio">↕ Load Order</option>
               <option value="size">💾 Size (Largest)</option>
               <option value="name">🔤 Name (A-Z)</option>
@@ -5442,6 +5443,8 @@
   function renderVanillaBar() {
     const g = appState.games[appState.selected_idx];
     document.getElementById('vanillaBar').style.display = g && (appState.vanilla || []).includes(g.appid) ? 'flex' : 'none';
+    const sm = document.getElementById('safeModeBar');
+    if (sm) sm.style.display = g && (appState.safe_mode || []).includes(g.appid) ? 'flex' : 'none';
   }
 
   function renderLoaderCard() {
@@ -6770,7 +6773,17 @@
     const groupView = mlChip === 'core' || mlChip.startsWith('g:');
     const groupBtns = groupView ? `<button class="ml-chip" onclick="mlGroupSet(true)">${t('Turn the group on')}</button><button class="ml-chip" onclick="mlGroupSet(false)">${t('Turn the group off')}</button>` : '';
     const shown = lib.mods.map((m, i) => ({ m, i })).filter(({ m }) => chipTests[mlChip](m) && (!fq || [m.name, m.note, m.source, m.version, m.group].join(' ').toLowerCase().includes(fq)));
+    const countText = (shown.length !== n) ? t('📦 Mod Library ({})', `${shown.length}/${n}`) : (n ? t('📦 Mod Library ({})', n) : t('📦 Mod Library'));
+    count.textContent = countText;
+    document.getElementById('subLib').textContent = countText;
     const sortEl = document.getElementById('mlSort');
+    if (sortEl && !sortEl.dataset.init) {
+      sortEl.dataset.init = '1';
+      try {
+        const savedSort = localStorage.getItem('modforge_ml_sort');
+        if (savedSort && ['prio', 'size', 'name', 'date'].includes(savedSort)) sortEl.value = savedSort;
+      } catch (e) {}
+    }
     const sortMode = sortEl ? sortEl.value : 'prio';
     if (sortMode === 'size') {
       shown.sort((a, b) => (b.m.size || 0) - (a.m.size || 0));

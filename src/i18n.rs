@@ -273,6 +273,7 @@ mod tests {
         "Modpack Archive (.zip)",
         "Safe Mode: {} content mod(s) temporarily disabled; core loaders remain active.",
         "{} is closed; all mods restored from Safe Mode.",
+        "{} was left in Safe Mode; restoring all mods.",
         "Before Safe Mode launch",
         "Mod staging folder does not exist.",
         "Cleaned {} prefix cache and dump file(s) ({}) freed.",
@@ -386,6 +387,7 @@ mod tests {
         "Open Folder",
         "Open Staged Folder",
         "🧹 Clean Prefix Caches",
+        "🛡 Playing in Safe Mode (core loaders active, content mods paused). Mods return when you close the game.",
     ];
 
     const MESSAGE_SOURCES: &[&str] = &[

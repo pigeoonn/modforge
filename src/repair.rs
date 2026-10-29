@@ -150,6 +150,9 @@ pub struct RigConfigData {
     /// if Gantry was closed in between.
     #[serde(default)]
     pub vanilla_sessions: Vec<String>,
+    /// Games started in Safe Mode (appids): all content mods come back when the game closes.
+    #[serde(default)]
+    pub safe_mode_sessions: Vec<String>,
     /// The first-run tour has been seen.
     #[serde(default)]
     pub tour_done: bool,

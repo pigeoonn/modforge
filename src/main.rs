@@ -874,6 +874,7 @@ impl AppState {
             "mods": self.mods,
             "library": self.library,
             "vanilla": self.config.vanilla_sessions,
+            "safe_mode": self.config.safe_mode_sessions,
             "app_version": env!("CARGO_PKG_VERSION"), "os": platform::OS, "new_version": self.new_version, "can_self_update": self.self_target.is_some(), "crash_reports": self.crash_reports, "update_ready": self.update_ready, "saved_mods": self.games.get(self.selected_idx).and_then(|g| self.config.saved_mods.get(&g.appid)).map(|v| v.iter().filter_map(|c| Some(format!("{}:{}", c["source"].as_str()?, c["id"].as_str()?))).collect::<Vec<_>>()).unwrap_or_default(), "settings": { "tour_done": self.config.tour_done, "keep_background": self.config.keep_background, "install_preview": !self.config.no_install_preview, "ui_scale": if self.config.ui_scale == 0 { 100 } else { self.config.ui_scale }, "reduce_motion": self.config.reduce_motion, "motion": if self.config.reduce_motion { "off" } else if self.config.calm_motion { "calm" } else { "full" }, "high_contrast": self.config.high_contrast, "deck": self.deck_on(), "is_deck": platform::is_steam_deck(), "theme": if self.config.theme.is_empty() { "dark" } else { self.config.theme.as_str() }, "custom_theme": serde_json::from_str::<Value>(&self.config.custom_theme).unwrap_or(Value::Null), "accent_from_game": self.config.accent_from_game, "accent": self.config.accent, "compact": self.config.compact, "show_adult": self.config.show_adult, "layout": serde_json::from_str::<Value>(&self.config.layout).unwrap_or(Value::Null), "seen_version": self.config.seen_version, "auto_backup": !self.config.no_auto_backup, "sounds": self.config.sounds, "haptics": self.config.haptics, "sync_folder": self.config.sync_folder, "download_limit_kb": self.config.download_limit_kb, "downloads_wait": self.config.downloads_wait, "checks_while_playing": self.config.checks_while_playing, "virustotal": self.config.virustotal, "vt_key": self.vt.key.is_some(), "vt_key_hint": self.vt.key.as_ref().map(|k| format!("…{}", &k[k.len().saturating_sub(4)..])) },
             "notes": self.notes.json(),
             "meta": self.meta_json(),
@@ -5403,7 +5404,7 @@ fn handle_drop_upload(mut req: Request, query: &str, state: &SharedState) {
             Ok(n)
         });
     match saved {
-        Ok(n) if n > 0 && is_setup_file(&safe_name) => {
+        Ok(n) if n > 0 && is_setup_file(&safe_name, &target) => {
             // a shared setup dropped on the window: show what it holds, fetch nothing yet
             let state_bg = Arc::clone(state);
             thread::spawn(move || {
@@ -5433,10 +5434,31 @@ fn handle_drop_upload(mut req: Request, query: &str, state: &SharedState) {
     }
 }
 
-/// A modpack or setup file of Gantry's, by its name.
-fn is_setup_file(name: &str) -> bool {
+/// A modpack or setup file of Gantry's, by its name or archive contents.
+fn is_setup_file(name: &str, path: &Path) -> bool {
     let n = name.to_lowercase();
-    n.ends_with(".gantrypack") || n.ends_with(".gantry.json")
+    if n.ends_with(".gantrypack") || n.ends_with(".gantry.json") || n.ends_with(".modpack.zip") || n.ends_with(".modpack") {
+        return true;
+    }
+    if n.ends_with(".zip") {
+        if let Ok(mut f) = fs::File::open(path) {
+            let mut b = [0u8; 4];
+            if std::io::Read::read(&mut f, &mut b).unwrap_or(0) >= 4 && &b == b"PK\x03\x04" {
+                let tool = if platform::IS_WINDOWS { "tar" } else { "bsdtar" };
+                let alt = if platform::IS_WINDOWS { "bsdtar" } else { "tar" };
+                let chosen = [tool, alt].into_iter().find(|t| fsutil::find_in_path(t).is_some());
+                if let Some(t) = chosen {
+                    if let Ok(out) = Command::new(t).arg("-tf").arg(path).output() {
+                        let listing = String::from_utf8_lossy(&out.stdout);
+                        if listing.lines().any(|l| l.trim().trim_start_matches("./") == "pack.json") {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Resolve a mod from the request: stable `id` first, positional `index` as legacy fallback.
@@ -10945,6 +10967,14 @@ fn play_in_safe_mode(state: &SharedState) {
     if let Some(lib) = library_of(&g) {
         match lib.stage_safe_mode() {
             Ok(count) => {
+                {
+                    let mut st = write_state(state);
+                    if !st.config.safe_mode_sessions.contains(&g.appid) {
+                        st.config.safe_mode_sessions.push(g.appid.clone());
+                    }
+                    st.save_config();
+                    st.notifier.bump();
+                }
                 log(state, "INFO", format!("Safe Mode: {} content mod(s) temporarily disabled; core loaders remain active.", count));
                 let _ = library_apply(state, &lib, false);
                 refresh_mods_shared(state);
@@ -10962,6 +10992,9 @@ fn watch_safe_mode_session(state: &SharedState, g: &GameEntry) {
     let mut seen = false;
     loop {
         thread::sleep(if cfg!(test) { Duration::from_millis(50) } else { Duration::from_secs(2) });
+        if !read_state(state).config.safe_mode_sessions.contains(&g.appid) {
+            return;
+        }
         let running = procs::is_game_running(g);
         if running {
             seen = true;
@@ -10969,11 +11002,45 @@ fn watch_safe_mode_session(state: &SharedState, g: &GameEntry) {
             break;
         }
     }
-    if let Some(lib) = library_of(g) {
+    end_safe_mode(state, &g.appid);
+}
+
+fn end_safe_mode(state: &SharedState, appid: &str) {
+    {
+        let mut st = write_state(state);
+        if !st.config.safe_mode_sessions.iter().any(|a| a == appid) {
+            return;
+        }
+        st.config.safe_mode_sessions.retain(|a| a != appid);
+        st.save_config();
+        st.notifier.bump();
+    }
+    let Some(g) = game_by_appid(state, appid) else { return };
+    if let Some(lib) = library_of(&g) {
         let _ = lib.restore_safe_mode();
         let _ = library_apply(state, &lib, false);
         log(state, "OK", format!("{} is closed; all mods restored from Safe Mode.", g.name));
         refresh_mods_shared(state);
+    }
+}
+
+/// After a restart: a safe mode session that was left open ends when its game is not running.
+fn resume_safe_mode_sessions(state: &SharedState) {
+    let ids = read_state(state).config.safe_mode_sessions.clone();
+    for id in ids {
+        let Some(g) = game_by_appid(state, &id) else {
+            let mut st = write_state(state);
+            st.config.safe_mode_sessions.retain(|a| a != &id);
+            st.save_config();
+            continue;
+        };
+        if procs::is_game_running(&g) {
+            let st = Arc::clone(state);
+            thread::spawn(move || watch_safe_mode_session(&st, &g));
+        } else {
+            log(state, "INFO", format!("{} was left in Safe Mode; restoring all mods.", g.name));
+            end_safe_mode(state, &id);
+        }
     }
 }
 
@@ -11786,6 +11853,7 @@ fn main() {
         background::set_while_playing(st.config.checks_while_playing);
     }
     resume_vanilla_sessions(&state);
+    resume_safe_mode_sessions(&state);
     spawn_health_monitor(Arc::downgrade(&state));
     spawn_cover_lookup(Arc::downgrade(&state));
     selfupdate::clean_up_after_update();
@@ -14914,6 +14982,14 @@ mod tests {
 
         let listing = String::from_utf8_lossy(&Command::new(tar_tool()).arg("-tf").arg(&pack).output().unwrap().stdout).to_string();
         assert!(listing.contains("pack.json") && listing.contains("hand.esp") && listing.contains("nx.esp"), "{listing}");
+        assert!(is_setup_file("standalone.zip", &pack));
+
+        let plain_zip = h._dir.join("regular_mod.zip");
+        let plain_stage = h._dir.join("plain-stage");
+        fs::create_dir_all(&plain_stage).unwrap();
+        fs::write(plain_stage.join("readme.txt"), "hello").unwrap();
+        Command::new(tar_tool()).args(["--format", "zip", "-cf"]).arg(&plain_zip).arg("-C").arg(&plain_stage).arg(".").output().unwrap();
+        assert!(!is_setup_file("regular_mod.zip", &plain_zip));
     }
 
     #[test]
@@ -15759,6 +15835,45 @@ mod tests {
 
         // a game without a library has nothing to take out and still ends cleanly
         end_vanilla(&h.state, "nobody");
+    }
+
+    #[test]
+    fn playing_in_safe_mode_tracks_session_and_restores_on_restart() {
+        let h = harness("safemodetest");
+        let _dir = add_plain_game(&h);
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let stage_loader = h._dir.join("stage-loader");
+        fs::create_dir_all(&stage_loader).unwrap();
+        fs::write(stage_loader.join("winhttp.dll"), "DLL").unwrap();
+        lib.add_from_dir(&stage_loader, "UE4SS Loader", "loader.zip").unwrap();
+
+        let stage_content = h._dir.join("stage-content");
+        fs::create_dir_all(stage_content.join("Data")).unwrap();
+        fs::write(stage_content.join("Data/content.esp"), "CONTENT").unwrap();
+        lib.add_from_dir(&stage_content, "Big Swords", "content.zip").unwrap();
+        lib.deploy(false).unwrap();
+
+        api(&h, "/api/play_safe_mode", json!({}));
+        wait_until("safe mode is active in state", || {
+            let st = api(&h, "/api/state", json!({}));
+            st["safe_mode"] == json!([g.appid.clone()])
+        });
+
+        wait_until("safe mode ended and content restored", || {
+            let st = api(&h, "/api/state", json!({}));
+            st["safe_mode"] == json!([]) && lib.mods().iter().all(|m| m.enabled)
+        });
+
+        // Crash resilience test: session left in config resumes cleanly
+        {
+            let mut st = h.state.write().unwrap();
+            st.config.safe_mode_sessions.push(g.appid.clone());
+        }
+        resume_safe_mode_sessions(&h.state);
+        wait_until("resumed safe mode session", || {
+            h.state.read().unwrap().config.safe_mode_sessions.is_empty()
+        });
     }
 
     #[test]
