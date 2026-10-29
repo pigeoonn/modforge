@@ -264,7 +264,7 @@ pub struct SaveFile {
 
 /// More files than this in one game's saves is not a list anyone reads.
 const MAX_LISTED: usize = 2000;
-const OLD_FORMAT: &str = "This backup was made by an older version of Gantry; it can only be restored as a whole.";
+const OLD_FORMAT: &str = "This backup was made by an older version of ModForge; it can only be restored as a whole.";
 
 fn files_under(dir: &Path, key: &str) -> Vec<(SaveFile, PathBuf)> {
     walkdir::WalkDir::new(dir)

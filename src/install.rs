@@ -20,7 +20,7 @@ pub fn exec_quote(p: &Path) -> String {
 pub fn desktop_entry(exe: &Path, icon: &Path) -> String {
     format!(
         "[Desktop Entry]\nType=Application\nName=Gantry\nGenericName=Mod & Trainer Hub\nComment=Mods, trainers and crash hunting for Proton games\n\
-Exec={}\nIcon={}\nTerminal=false\nCategories=Game;Utility;\nKeywords=gantry;proton;mods;ue4ss;trainer;steam;hydra;\nStartupNotify=false\nStartupWMClass=Gantry\n",
+Exec={}\nIcon={}\nTerminal=false\nCategories=Game;Utility;\nKeywords=modforge;gantry;proton;mods;ue4ss;trainer;steam;hydra;\nStartupNotify=false\nStartupWMClass=ModForge\n",
         exec_quote(exe),
         icon.display()
     )
@@ -43,11 +43,11 @@ fn targets(home: &Path) -> Targets {
     let apps = home.join(".local/share/applications");
     let icons = home.join(".local/share/icons/hicolor");
     Targets {
-        desktop: apps.join("gantry.desktop"),
-        png: icons.join("256x256/apps/gantry.png"),
-        svg: icons.join("scalable/apps/gantry.svg"),
+        desktop: apps.join("modforge.desktop"),
+        png: icons.join("256x256/apps/modforge.png"),
+        svg: icons.join("scalable/apps/modforge.svg"),
         link: home.join(".local/bin/rig"),
-        shortcut: home.join("Desktop/Gantry.desktop"),
+        shortcut: home.join("Desktop/ModForge.desktop"),
         old_desktop: apps.join("protonrig.desktop"),
         old_png: icons.join("256x256/apps/protonrig.png"),
         old_svg: icons.join("scalable/apps/protonrig.svg"),
@@ -76,8 +76,8 @@ pub fn png_to_icns(png: &[u8]) -> Vec<u8> {
 fn mac_info_plist() -> String {
     format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\"><dict>\n\
-<key>CFBundleName</key><string>Gantry</string>\n<key>CFBundleDisplayName</key><string>Gantry</string>\n<key>CFBundleIdentifier</key><string>io.github.pigeoonn.gantry</string>\n\
-<key>CFBundleExecutable</key><string>Gantry</string>\n<key>CFBundleIconFile</key><string>gantry</string>\n<key>CFBundlePackageType</key><string>APPL</string>\n\
+<key>CFBundleName</key><string>ModForge</string>\n<key>CFBundleDisplayName</key><string>ModForge</string>\n<key>CFBundleIdentifier</key><string>io.github.pigeoonn.gantry</string>\n\
+<key>CFBundleExecutable</key><string>ModForge</string>\n<key>CFBundleIconFile</key><string>modforge</string>\n<key>CFBundlePackageType</key><string>APPL</string>\n\
 <key>CFBundleShortVersionString</key><string>{}</string>\n<key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>\n\
 <key>NSHighResolutionCapable</key><true/>\n</dict></plist>\n",
         env!("CARGO_PKG_VERSION")
@@ -85,7 +85,7 @@ fn mac_info_plist() -> String {
 }
 
 fn mac_app(home: &Path) -> PathBuf {
-    home.join("Applications/Gantry.app")
+    home.join("Applications/ModForge.app")
 }
 
 fn mac_install(home: &Path, exe: &Path) -> Result<Vec<String>, String> {
@@ -94,13 +94,13 @@ fn mac_install(home: &Path, exe: &Path) -> Result<Vec<String>, String> {
     if !exe.is_file() {
         return Err(format!("cannot resolve {}: not found", exe.display()));
     }
-    let main = app.join("Contents/MacOS/Gantry");
+    let main = app.join("Contents/MacOS/ModForge");
     if crate::fsutil::canonical(exe).ok() != crate::fsutil::canonical(&main).ok() {
         crate::fsutil::atomic_copy(exe, &main).map_err(|e| io("copying the program", e))?;
     }
     crate::fsutil::set_executable(&main).map_err(|e| io("program", e))?;
     atomic_write(&app.join("Contents/Info.plist"), mac_info_plist()).map_err(|e| io("Info.plist", e))?;
-    atomic_write(&app.join("Contents/Resources/gantry.icns"), png_to_icns(ICON_PNG)).map_err(|e| io("icon", e))?;
+    atomic_write(&app.join("Contents/Resources/modforge.icns"), png_to_icns(ICON_PNG)).map_err(|e| io("icon", e))?;
     Ok(vec![format!("app       → {}", app.display())])
 }
 
@@ -128,14 +128,14 @@ pub fn png_to_ico(png: &[u8]) -> Vec<u8> {
 
 /// Folder the program is copied to by `--install` on Windows, and the Start menu entry.
 fn win_paths(home: &Path) -> (PathBuf, PathBuf) {
-    (home.join("AppData/Local/Programs/Gantry"), home.join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Gantry.lnk"))
+    (home.join("AppData/Local/Programs/ModForge"), home.join("AppData/Roaming/Microsoft/Windows/Start Menu/Programs/ModForge.lnk"))
 }
 
 /// PowerShell that creates a shortcut (the system has no other scriptable way to make one).
 pub fn shortcut_script(lnk: &Path, target: &Path, icon: &Path, args: &str) -> String {
     let q = |p: &Path| p.to_string_lossy().replace('\'', "''");
     format!(
-        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{}');$s.TargetPath='{}';$s.Arguments='{}';$s.IconLocation='{}';$s.Description='Gantry: mods for your games';$s.Save()",
+        "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{}');$s.TargetPath='{}';$s.Arguments='{}';$s.IconLocation='{}';$s.Description='ModForge: mods for your games';$s.Save()",
         q(lnk),
         q(target),
         args.replace('\'', "''"),
@@ -176,7 +176,7 @@ fn windows_install(home: &Path, exe: &Path) -> Result<Vec<String>, String> {
     if crate::fsutil::canonical(exe).ok() != crate::fsutil::canonical(&target).ok() {
         crate::fsutil::atomic_copy(exe, &target).map_err(|e| io("copying the program", e))?;
     }
-    let ico = dir.join("gantry.ico");
+    let ico = dir.join("modforge.ico");
     atomic_write(&ico, png_to_ico(ICON_PNG)).map_err(|e| io("icon", e))?;
     let mut steps = vec![format!("program   → {}", target.display())];
     if let Some(p) = lnk.parent() {
@@ -204,7 +204,7 @@ fn windows_uninstall(home: &Path) -> Vec<String> {
         steps.push(format!("removed   {}", lnk.display()));
     }
     // the running program cannot delete itself: everything else goes, and the folder if it can
-    for f in ["gantry.ico", "rig.exe"] {
+    for f in ["modforge.ico", "rig.exe"] {
         if fs::remove_file(dir.join(f)).is_ok() {
             steps.push(format!("removed   {}", dir.join(f).display()));
         }
@@ -228,8 +228,8 @@ fn windows_register_nxm(config_dir: &Path, exe: &Path) -> Result<String, String>
         return Err("Windows did not accept the change.".into());
     }
     Ok(match previous {
-        Some(_) => format!("Gantry now opens Nexus Mods links (it replaced {}; Unregister restores it).", "the previous program"),
-        None => "Gantry now opens Nexus Mods links.".into(),
+        Some(_) => format!("ModForge now opens Nexus Mods links (it replaced {}; Unregister restores it).", "the previous program"),
+        None => "ModForge now opens Nexus Mods links.".into(),
     })
 }
 
@@ -242,7 +242,7 @@ fn windows_unregister_nxm(config_dir: &Path) -> String {
         reg(&["add", r"HKCU\Software\Classes\nxm\shell\open\command", "/ve", "/d", &prev, "/f"]);
     }
     let _ = fs::remove_file(prev_file);
-    if prev.is_empty() { "Gantry no longer handles Nexus Mods links.".into() } else { format!("Nexus Mods links go back to {}.", "the previous program") }
+    if prev.is_empty() { "ModForge no longer handles Nexus Mods links.".into() } else { format!("Nexus Mods links go back to {}.", "the previous program") }
 }
 
 /// Remove what the app installed under its former name (ProtonRig). Only files that are
@@ -324,7 +324,7 @@ pub fn uninstall(home: &Path, exe: &Path) -> Vec<String> {
             steps.push(format!("removed   {}", p.display()));
         }
     }
-    if file_has(&t.shortcut, "Name=Gantry") && fs::remove_file(&t.shortcut).is_ok() {
+    if (file_has(&t.shortcut, "Name=ModForge") || file_has(&t.shortcut, "Name=Gantry")) && fs::remove_file(&t.shortcut).is_ok() {
         steps.push(format!("removed   {}", t.shortcut.display()));
     }
     remove_legacy(&t, &mut steps);
@@ -357,12 +357,12 @@ pub fn game_shortcut(home: &Path, exe: &Path, appid: &str, name: &str, on_deskto
         return Err("This game's id cannot be put into a shortcut.".into());
     }
     let clean_name: String = name.chars().filter(|c| !c.is_control()).collect::<String>().trim().to_string();
-    let title = format!("{} (Gantry)", if clean_name.is_empty() { "Game" } else { &clean_name });
+    let title = format!("{} (ModForge)", if clean_name.is_empty() { "Game" } else { &clean_name });
     if cfg!(windows) {
         let (dir, menu) = win_paths(home);
         let target = dir.join("rig.exe");
         let target = if target.is_file() { target } else { exe.to_path_buf() };
-        let ico = dir.join("gantry.ico");
+        let ico = dir.join("modforge.ico");
         let mut written = Vec::new();
         let mut places = vec![menu.with_file_name(format!("{title}.lnk"))];
         if on_desktop {
@@ -392,10 +392,10 @@ pub fn game_shortcut(home: &Path, exe: &Path, appid: &str, name: &str, on_deskto
     }
     let exe = crate::fsutil::canonical(exe).map_err(|e| format!("cannot resolve {}: {}", exe.display(), e))?;
     let entry = format!(
-        "[Desktop Entry]\nType=Application\nName={title}\nComment=Play {title} with its mods\nExec={} --play {appid}\nIcon=gantry\nTerminal=false\nCategories=Game;\nStartupNotify=false\nX-Gantry-Game={appid}\n",
+        "[Desktop Entry]\nType=Application\nName={title}\nComment=Play {title} with its mods\nExec={} --play {appid}\nIcon=modforge\nTerminal=false\nCategories=Game;\nStartupNotify=false\nX-ModForge-Game={appid}\n",
         exec_quote(&exe)
     );
-    let file = format!("gantry-play-{}.desktop", file_slug(&clean_name));
+    let file = format!("modforge-play-{}.desktop", file_slug(&clean_name));
     let mut written = Vec::new();
     let menu = home.join(".local/share/applications").join(&file);
     atomic_write(&menu, &entry).map_err(|e| e.to_string())?;
@@ -409,11 +409,11 @@ pub fn game_shortcut(home: &Path, exe: &Path, appid: &str, name: &str, on_deskto
     Ok(written)
 }
 
-const NXM_DESKTOP: &str = "gantry-nxm.desktop";
+const NXM_DESKTOP: &str = "modforge-nxm.desktop";
 
 pub fn nxm_desktop_entry(exe: &Path) -> String {
     format!(
-        "[Desktop Entry]\nType=Application\nName=Gantry (Nexus Mods links)\nExec={} %u\nNoDisplay=true\nTerminal=false\nMimeType=x-scheme-handler/nxm;\nCategories=Game;\n",
+        "[Desktop Entry]\nType=Application\nName=ModForge (Nexus Mods links)\nExec={} %u\nNoDisplay=true\nTerminal=false\nMimeType=x-scheme-handler/nxm;\nCategories=Game;\n",
         exec_quote(exe)
     )
 }
@@ -457,9 +457,9 @@ pub fn register_nxm(home: &Path, config_dir: &Path, exe: &Path) -> Result<String
         return Err("xdg-mime did not accept the change (is xdg-utils installed?).".into());
     }
     Ok(if previous.is_empty() || previous == NXM_DESKTOP {
-        "Gantry now opens Nexus Mods links.".into()
+        "ModForge now opens Nexus Mods links.".into()
     } else {
-        format!("Gantry now opens Nexus Mods links (it replaced {}; Unregister restores it).", previous)
+        format!("ModForge now opens Nexus Mods links (it replaced {}; Unregister restores it).", previous)
     })
 }
 
@@ -479,7 +479,7 @@ pub fn unregister_nxm(home: &Path, config_dir: &Path) -> String {
     let _ = fs::remove_file(prev_file);
     refresh_desktop_caches(home);
     if prev.is_empty() {
-        "Gantry no longer handles Nexus Mods links.".into()
+        "ModForge no longer handles Nexus Mods links.".into()
     } else {
         format!("Nexus Mods links go back to {}.", prev)
     }
@@ -511,8 +511,8 @@ mod tests {
         assert_eq!(u32::from_le_bytes(ico[18..22].try_into().unwrap()), 22);
         assert_eq!(&ico[22..], &png[..]);
         assert_eq!(ico[6], 0, "256 is written as 0");
-        let s = shortcut_script(Path::new(r"C:\Menu\Gantry.lnk"), Path::new(r"C:\Users\O'Neil\rig.exe"), Path::new(r"C:\i.ico"), "--play 12");
-        assert!(s.contains("O''Neil") && s.contains("CreateShortcut('C:\\Menu\\Gantry.lnk')") && s.contains("$s.Arguments='--play 12'"), "{s}");
+        let s = shortcut_script(Path::new(r"C:\Menu\ModForge.lnk"), Path::new(r"C:\Users\O'Neil\rig.exe"), Path::new(r"C:\i.ico"), "--play 12");
+        assert!(s.contains("O''Neil") && s.contains("CreateShortcut('C:\\Menu\\ModForge.lnk')") && s.contains("$s.Arguments='--play 12'"), "{s}");
         assert_eq!(parse_reg_default("\r\nHKEY\\x\r\n    (Standard)    REG_SZ    \"C:\\a b\\rig.exe\" \"%1\"\r\n").as_deref(), Some("\"C:\\a b\\rig.exe\" \"%1\""));
         assert_eq!(parse_reg_default("nothing"), None);
     }
@@ -524,7 +524,7 @@ mod tests {
         assert_eq!(u32::from_be_bytes(icns[4..8].try_into().unwrap()) as usize, icns.len());
         assert_eq!(&icns[8..12], b"ic08");
         assert_eq!(u32::from_be_bytes(icns[12..16].try_into().unwrap()) as usize, icns.len() - 8);
-        assert!(mac_info_plist().contains("<key>CFBundleExecutable</key><string>Gantry</string>"));
+        assert!(mac_info_plist().contains("<key>CFBundleExecutable</key><string>ModForge</string>"));
     }
 
     #[test]
@@ -540,9 +540,9 @@ mod tests {
             let files = game_shortcut(&home, &exe, "3164500", "Schedule I: the \"game\"\n", true).unwrap();
             assert_eq!(files.len(), 2);
             let t = fs::read_to_string(&files[0]).unwrap();
-            assert!(t.contains("Name=Schedule I: the \"game\" (Gantry)\n") && t.contains("--play 3164500\n") && t.contains("Categories=Game;"), "{t}");
+            assert!(t.contains("Name=Schedule I: the \"game\" (ModForge)\n") && t.contains("--play 3164500\n") && t.contains("Categories=Game;"), "{t}");
             assert!(t.contains(&format!("Exec=\"{}\" --play", crate::fsutil::canonical(&exe).unwrap().display())), "the path with a space is quoted: {t}");
-            assert_eq!(files[0].file_name().unwrap().to_string_lossy(), "gantry-play-schedule-i-the-game.desktop");
+            assert_eq!(files[0].file_name().unwrap().to_string_lossy(), "modforge-play-schedule-i-the-game.desktop");
             assert!(files[1].starts_with(home.join("Desktop")));
             // no desktop folder, no desktop copy
             let h2 = d.join("home2");
@@ -635,7 +635,7 @@ mod tests {
         assert!(!targets(&d2.join("h")).shortcut.exists());
 
         let removed = uninstall(&home, &exe);
-        assert!(removed.iter().any(|s| s.contains("Gantry.desktop")), "{removed:?}");
+        assert!(removed.iter().any(|s| s.contains("ModForge.desktop")), "{removed:?}");
         assert!(!t.shortcut.exists() && !t.desktop.exists());
     }
 
@@ -653,7 +653,7 @@ mod tests {
         assert!(fs::read_to_string(&f).unwrap().contains(&crate::fsutil::canonical(&exe).unwrap().to_string_lossy().to_string()));
         assert_eq!(fs::read_to_string(cfg.join("nxm_previous_handler")).unwrap(), "mo2.desktop");
         // registering twice must not remember ourselves as the "previous" handler
-        register_nxm_files(&d.join("home"), &cfg, &exe, Some("gantry-nxm.desktop")).unwrap();
+        register_nxm_files(&d.join("home"), &cfg, &exe, Some("modforge-nxm.desktop")).unwrap();
         assert_eq!(fs::read_to_string(cfg.join("nxm_previous_handler")).unwrap(), "mo2.desktop");
         assert!(register_nxm_files(&d.join("home"), &cfg, &d.join("nope"), None).is_err());
     }

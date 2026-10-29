@@ -37,7 +37,7 @@ pub fn tail(text: &str, max: usize) -> &str {
 pub fn write(dir: &Path, now_ms: u64, version: &str, os: &str, what: &str, log_tail: &str, home: &str) -> io::Result<PathBuf> {
     fs::create_dir_all(dir)?;
     let body = format!(
-        "Gantry {version} on {os}\n\nWhat failed:\n{what}\n\nThe end of the log:\n{log_tail}\n\nNothing in this file was sent anywhere. Read it before you attach it to a bug report.\n"
+        "ModForge {version} on {os}\n\nWhat failed:\n{what}\n\nThe end of the log:\n{log_tail}\n\nNothing in this file was sent anywhere. Read it before you attach it to a bug report.\n"
     );
     let path = dir.join(format!("crash-{now_ms}.txt"));
     fs::write(&path, redact(&body, home))?;
@@ -103,7 +103,7 @@ mod tests {
         assert_eq!(l.len(), KEEP);
         assert!(l[0].ends_with("crash-1013.txt") && l[KEEP - 1].ends_with("crash-1004.txt"));
         let text = fs::read_to_string(&l[0]).unwrap();
-        assert!(text.contains("Gantry 5.4.0 on Linux") && text.contains("boom in ~/game") && !text.contains("/home/ann"), "{text}");
+        assert!(text.contains("ModForge 5.4.0 on Linux") && text.contains("boom in ~/game") && !text.contains("/home/ann"), "{text}");
         assert_eq!(unseen(&d, 0), KEEP);
         assert_eq!(unseen(&d, 1010), 3);
         assert_eq!(unseen(&d, 1013), 0);

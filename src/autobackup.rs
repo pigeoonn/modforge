@@ -15,12 +15,12 @@ pub struct Entry {
 }
 
 pub fn file_name(at_ms: u64) -> String {
-    format!("gantry-{:013}.json", at_ms)
+    format!("modforge-{:013}.json", at_ms)
 }
 
 /// The timestamp in a backup file name; `None` for anything that is not one of ours.
 pub fn parse_name(name: &str) -> Option<u64> {
-    let digits = name.strip_prefix("gantry-")?.strip_suffix(".json")?;
+    let digits = name.strip_prefix("modforge-").or_else(|| name.strip_prefix("gantry-"))?.strip_suffix(".json")?;
     if digits.is_empty() || digits.len() > 20 || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
@@ -69,9 +69,9 @@ pub fn store(dir: &Path, at_ms: u64, json: &str) -> Result<String, String> {
 
 /// Read one backup by file name. Names are checked so nothing outside `dir` can be reached.
 pub fn read(dir: &Path, name: &str) -> Result<serde_json::Value, String> {
-    parse_name(name).ok_or_else(|| "That is not a backup of Gantry.".to_string())?;
+    parse_name(name).ok_or_else(|| "That is not a backup of ModForge.".to_string())?;
     let bytes = fs::read(dir.join(name)).map_err(|_| "That backup is gone.".to_string())?;
-    serde_json::from_slice(&bytes).map_err(|_| "This file is not a Gantry backup.".to_string())
+    serde_json::from_slice(&bytes).map_err(|_| "This file is not a ModForge backup.".to_string())
 }
 
 #[cfg(test)]
@@ -79,7 +79,7 @@ mod tests {
     use super::*;
 
     fn tmp(tag: &str) -> std::path::PathBuf {
-        let d = std::env::temp_dir().join(format!("gantry-autobackup-{}-{}", tag, crate::fsutil::unique_token()));
+        let d = std::env::temp_dir().join(format!("modforge-autobackup-{}-{}", tag, crate::fsutil::unique_token()));
         let _ = fs::remove_dir_all(&d);
         fs::create_dir_all(&d).unwrap();
         d

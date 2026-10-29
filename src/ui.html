@@ -575,7 +575,7 @@
 
 
   /* ===================================================================================
-     DESIGN "GANTRY" (html.t2): flat layered surfaces, one accent, content first.
+     DESIGN "MODFORGE" (html.t2): flat layered surfaces, one accent, content first.
      The previous look stays available as "Classic" (the menu in the top bar).
      =================================================================================== */
   .gthumb { display: none; }
@@ -1785,7 +1785,7 @@
 <!-- WHAT'S NEW -->
 <div class="modal-backdrop" id="newsModal" onclick="if (event.target === this) closeNews()">
   <div class="glass-card modal-window" style="width:min(560px,94vw);">
-    <div class="modal-hdr"><span>✨ What's new in Gantry</span><button class="btn" onclick="closeNews()" aria-label="Close">✕</button></div>
+    <div class="modal-hdr"><span>✨ What's new in ModForge</span><button class="btn" onclick="closeNews()" aria-label="Close">✕</button></div>
     <div id="newsBody" data-dyn style="z-index:2; display:flex; flex-direction:column; gap:10px; overflow-y:auto; min-height:0;"></div>
   </div>
 </div>
@@ -2074,14 +2074,14 @@
       throw e;
     }
     if (api) {
-      // 403 = this page's one-time token belongs to an earlier Gantry process
+      // 403 = this page's one-time token belongs to an earlier ModForge process
       if (res.status === 403) connectionProblem('stale');
       else connectionOk();
     }
     return res;
   };
 
-  // A window whose Gantry was closed or restarted must say so, not silently ignore clicks.
+  // A window whose ModForge was closed or restarted must say so, not silently ignore clicks.
   let connTimer = null;
   function connOverlay(html) {
     let el = document.getElementById('connOverlay');
@@ -2111,7 +2111,7 @@
       }
     }
     connOverlay(`<div style="max-width:420px;"><div style="font-size:20px;margin-bottom:8px;">${t('⚠ Lost connection to ModForge')}</div>
-      <div style="font-weight:400;color:#a9b6d0;">${t('It was probably closed. Open <b>Gantry</b> from the application menu; this window reconnects by itself.')}</div>
+      <div style="font-weight:400;color:#a9b6d0;">${t('It was probably closed. Open <b>ModForge</b> from the application menu; this window reconnects by itself.')}</div>
       <button class="btn" style="margin-top:16px;" onclick="location.reload()">${t('Try again now')}</button></div>`);
     if (!connTimer) {
       connTimer = setInterval(async () => {
@@ -2470,7 +2470,7 @@
     const g = appid ? appState.games.find(x => x.appid === appid) : appState.games[appState.selected_idx];
     if (!g) return;
     const msg = g.is_custom
-      ? t('Remove "{}" from Gantry? Its files are not touched.', g.name)
+      ? t('Remove "{}" from ModForge? Its files are not touched.', g.name)
       : t('Remove "{}" from the list? Its files are not touched, and you can bring it back from the Overview.', g.name);
     if (!confirm(msg)) return;
     ipcSend('/api/remove_game', { appid: g.appid });
@@ -2542,7 +2542,7 @@
   }
 
   let sortMode = 'name';
-  try { sortMode = localStorage.getItem('gantrySort') || 'name'; } catch (e) {}
+  try { sortMode = localStorage.getItem('modforgeSort') || localStorage.getItem('gantrySort') || 'name'; } catch (e) {}
   function renderSortSelect() {
     const sel = document.getElementById('sortSelect');
     const opts = [['name', t('Sort: A to Z')], ['recent', t('Sort: recently played')], ['played', t('Sort: most played')], ['mods', t('Sort: most mods')]];
@@ -2551,7 +2551,7 @@
   }
   function setSort(v) {
     sortMode = v;
-    try { localStorage.setItem('gantrySort', v); } catch (e) {}
+    try { localStorage.setItem('modforgeSort', v); localStorage.setItem('gantrySort', v); } catch (e) {}
     renderSortSelect();
     renderGames(true);
   }
@@ -2570,7 +2570,7 @@
     document.getElementById('notesTitle2').textContent = g.name;
     document.getElementById('gnNotes').value = m.notes || '';
     document.getElementById('gnTags').value = (m.tags || []).join(', ');
-    document.getElementById('gnTime').textContent = m.playtime_s ? t('{} in Gantry', fmtDuration(m.playtime_s)) : '';
+    document.getElementById('gnTime').textContent = m.playtime_s ? t('{} in ModForge', fmtDuration(m.playtime_s)) : '';
     document.getElementById('gameNotesModal').classList.add('open');
   }
 
@@ -2715,10 +2715,10 @@
   }
 
   let libView = 'list';
-  try { libView = localStorage.getItem('gantryLibView') === 'grid' ? 'grid' : 'list'; } catch (e) {}
+  try { libView = (localStorage.getItem('modforgeLibView') || localStorage.getItem('gantryLibView')) === 'grid' ? 'grid' : 'list'; } catch (e) {}
   function toggleLibView() {
     libView = libView === 'grid' ? 'list' : 'grid';
-    try { localStorage.setItem('gantryLibView', libView); } catch (e) {}
+    try { localStorage.setItem('modforgeLibView', libView); localStorage.setItem('gantryLibView', libView); } catch (e) {}
     renderGames(true);
   }
   function tileColor(name) {
@@ -2860,7 +2860,7 @@
       const bits = [];
       if (lp) bits.push(`<span>${t('Played {}', `<b>${escapeHtml(ago(lp))}</b>`)}</span>`);
       const pm = (appState.meta || {})[g.appid] || {};
-      if (pm.playtime_s) bits.push(`<span>${t('{} in Gantry', fmtDuration(pm.playtime_s))}</span>`);
+      if (pm.playtime_s) bits.push(`<span>${t('{} in ModForge', fmtDuration(pm.playtime_s))}</span>`);
       document.getElementById('heroMeta').innerHTML = bits.join('');
       document.getElementById('btnFav').textContent = pm.fav ? '★' : '☆';
       document.getElementById('btnFav').title = pm.fav ? t('Unpin') : t('Pin to top');
@@ -3179,7 +3179,7 @@
       <div class="cp-row"><button class="btn" onclick="copyThemeCode()">${t('Copy as a code')}</button><button class="btn" onclick="useThemeCode()">${t('Use a code from a friend')}</button></div></div>`;
   }
   // A theme travels as a short text: "gantry-theme:" and the colour, roundness, light/dark and accent.
-  const THEME_CODE = 'gantry-theme:';
+  const THEME_CODE = 'modforge-theme:';
   function themeToCode(s) {
     const c = s.custom_theme || {};
     const o = { h: Math.round(c.hue ?? 250), r: Math.round(c.radius ?? 14), l: c.light ? 1 : 0, a: ACCENTS[s.accent] ? s.accent : '' };
@@ -3213,7 +3213,7 @@
   }
   function syncRow(st) {
     const has = !!st.sync_folder;
-    return `<div class="cp-preset" style="flex-direction:column; align-items:stretch; gap:8px"><span><b>${t('Sync folder')}</b><code>${t('A folder that Syncthing, Dropbox or a USB stick keeps in step between your computers. Gantry puts your profiles, notes, favourites, saved mods and mod lists there (never paths, keys or play time).')}</code></span>
+    return `<div class="cp-preset" style="flex-direction:column; align-items:stretch; gap:8px"><span><b>${t('Sync folder')}</b><code>${t('A folder that Syncthing, Dropbox or a USB stick keeps in step between your computers. ModForge puts your profiles, notes, favourites, saved mods and mod lists there (never paths, keys or play time).')}</code></span>
       <div class="cp-row"><input type="text" class="input-field" id="syncPath" value="${escapeHtml(st.sync_folder || '')}" placeholder="${escapeHtml(t('Full path of a folder'))}" aria-label="${escapeHtml(t('Sync folder'))}" autocomplete="off" spellcheck="false" style="flex:1; min-width:0"><button class="btn" onclick="ipcSend('/api/sync_folder_set', { path: document.getElementById('syncPath').value }); setTimeout(openSettings, 500)">${t('Save')}</button></div>
       ${has ? `<div class="cp-row"><button class="btn" onclick="ipcSend('/api/sync_push', {}); setTimeout(openSettings, 900)">${t('Send now')}</button><button class="btn" onclick="syncPull()">${t('Bring my setup here')}</button><span id="syncInfo" style="color:var(--text-muted); font-size:12px"></span></div>` : ''}</div>`;
   }
@@ -3236,7 +3236,7 @@
     const row = (key, on, text, hint) => `<label class="cp-preset"><input type="checkbox" ${on ? 'checked' : ''} onchange="ipcSend('/api/settings', { ${key}: this.checked })"><span><b>${escapeHtml(text)}</b><code>${escapeHtml(hint)}</code></span></label>`;
     document.getElementById('settingsBody').innerHTML =
       `<div class="cp-preset" style="align-items:center; background:linear-gradient(135deg, rgba(61,220,151,0.08), rgba(56,189,248,0.08)); border:1px solid rgba(61,220,151,0.3);"><span style="flex:1"><b>🔑 API Keys Vault</b><code>Nexus Mods, mod.io, Steam Web API, VirusTotal — saved permanently in one place.</code></span><button class="btn btn-heal" onclick="closeModals(); openApiVault();">${t('Open')}</button></div>` +
-      row('keep_background', st.keep_background, t('Keep ModForge running after the window is closed'), t('Update notices keep coming; start Gantry again to open the window.')) +
+      row('keep_background', st.keep_background, t('Keep ModForge running after the window is closed'), t('Update notices keep coming; start ModForge again to open the window.')) +
       `<label class="cp-preset"><span style="flex:1"><b>${t('Interface size')}</b></span><select class="proton-select" style="display:inline-block" onchange="ipcSend('/api/settings', { ui_scale: Number(this.value) })">${[100, 115, 130, 150].map(v => `<option value="${v}" ${(st.ui_scale || 100) === v ? 'selected' : ''}>${v} %</option>`).join('')}</select></label>` +
       `<label class="cp-preset"><span style="flex:1"><b>${t('Motion')}</b><code>${t('Full has springs and lifts, Calm is quicker and quieter, Off shows everything at once.')}</code></span><select class="proton-select" style="display:inline-block" onchange="ipcSend('/api/settings', { motion: this.value })">${[['full', t('Full')], ['calm', t('Calm')], ['off', t('Off')]].map(([v, l]) => `<option value="${v}" ${(st.motion || 'full') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` +
       `<div class="cp-preset" style="flex-direction:column; align-items:stretch; gap:10px"><span><b>${t('Theme')}</b></span><div class="theme-grid">${[...Object.keys(THEMES), 'custom', 'auto'].map(id => { const th = id === 'custom' ? customTheme(st.custom_theme) : id === 'auto' ? null : THEMES[id]; return `<button class="theme-card ${(st.theme || 'dark') === id ? 'on' : ''}" onclick="ipcSend('/api/settings', { theme: '${id}' })" title="${escapeHtml(id)}"><span class="sw">${th ? th.sw.map(c => `<i style="background:${c}"></i>`).join('') : `<i style="background:#12161f"></i><i style="background:#fbfcfe"></i><i style="background:#3ddc97"></i>`}</span><b>${escapeHtml(id === 'auto' ? t('Follow the system') : id === 'custom' ? t('Custom') : th.name)}</b></button>`; }).join('')}</div>${st.theme === 'custom' ? customEditor(st.custom_theme || {}) : ''}</div>` +
@@ -3259,11 +3259,11 @@
       row('compact', st.compact, t('Compact lists'), t('Tighter rows so more fits on the screen.')) +
       row('deck_mode', st.deck, t('Controller mode'), t('Bigger controls; a gamepad moves around and presses buttons (A, B, X, Y, LB, RB).')) +
       row('high_contrast', st.high_contrast, t('Stronger text and borders'), t('Easier to read on dim screens.')) +
-      row('install_preview', st.install_preview, t('Ask before installing a mod whose place had to be guessed'), t('Gantry shows where the files would go and waits for your OK.')) +
+      row('install_preview', st.install_preview, t('Ask before installing a mod whose place had to be guessed'), t('ModForge shows where the files would go and waits for your OK.')) +
       (appState.place_rules ? `<div class="cp-row"><button class="btn" onclick="ipcSend('/api/place_rules_clear', {})">${escapeHtml(tp(appState.place_rules, 'Forget where mods go for this game ({} answer)', 'Forget where mods go for this game ({} answers)'))}</button></div>` : '') +
-      `<div class="cp-note">${t('Gantry {}', appState.app_version || '')}${appState.new_version ? ' · ' + t('a newer version is available: {}', appState.new_version) : ''}</div>` +
-      (appState.update_ready ? `<div class="cp-note" style="color:var(--good, #10b981)">${escapeHtml(t('Gantry {} is in place. Close Gantry and open it again to use it.', appState.update_ready))}</div>` : appState.new_version && appState.can_self_update ? `<div class="cp-row" style="margin-top:6px"><button class="btn btn-heal" onclick='if (confirm(${JS(t('Put Gantry {} in place of this copy? It comes from the Gantry release on GitHub and its checksum is checked first. You close Gantry and open it again afterwards.', appState.new_version))})) { ipcSend("/api/self_update", {}); showToast(t("Downloading the new Gantry…")); }'>${escapeHtml(t('Update now'))}</button></div>` : '') +
-      `<div class="cp-preset" style="align-items:center"><span style="flex:1"><b>Steam</b><code>${escapeHtml(t('Put Gantry in your Steam library, to open it from Big Picture or a Steam Deck.'))}</code></span><button class="btn" onclick='if (confirm(${JS(t('Add Gantry to Steam\'s library? Steam has to be closed for this: if it is open, Gantry closes it, adds the entry and starts it again. Close anything Steam is doing first.'))})) { ipcSend("/api/steam_shortcut", { close_steam: true }); showToast(t("Adding Gantry to Steam…")); }'>${escapeHtml(t('Add ModForge to Steam'))}</button></div>` +
+      `<div class="cp-note">${t('ModForge {}', appState.app_version || '')}${appState.new_version ? ' · ' + t('a newer version is available: {}', appState.new_version) : ''}</div>` +
+      (appState.update_ready ? `<div class="cp-note" style="color:var(--good, #10b981)">${escapeHtml(t('ModForge {} is in place. Close ModForge and open it again to use it.', appState.update_ready))}</div>` : appState.new_version && appState.can_self_update ? `<div class="cp-row" style="margin-top:6px"><button class="btn btn-heal" onclick='if (confirm(${JS(t('Put ModForge {} in place of this copy? It comes from the ModForge release on GitHub and its checksum is checked first. You close ModForge and open it again afterwards.', appState.new_version))})) { ipcSend("/api/self_update", {}); showToast(t("Downloading the new ModForge…")); }'>${escapeHtml(t('Update now'))}</button></div>` : '') +
+      `<div class="cp-preset" style="align-items:center"><span style="flex:1"><b>Steam</b><code>${escapeHtml(t('Put ModForge in your Steam library, to open it from Big Picture or a Steam Deck.'))}</code></span><button class="btn" onclick='if (confirm(${JS(t('Add ModForge to Steam\'s library? Steam has to be closed for this: if it is open, ModForge closes it, adds the entry and starts it again. Close anything Steam is doing first.'))})) { ipcSend("/api/steam_shortcut", { close_steam: true }); showToast(t("Adding ModForge to Steam…")); }'>${escapeHtml(t('Add ModForge to Steam'))}</button></div>` +
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/self_update_check', {}); showToast(t('Looking for a newer ModForge…'))">${t('Check for a newer ModForge')}</button><button class="btn" onclick="tourStep = 0; closeModals(); showTour()">${t('Show the tour again')}</button><button class="btn" onclick="closeModals(); openWelcome()">${t('Check my games')}</button><button class="btn" onclick="closeModals(); openKeys()">${t('Keyboard shortcuts')}</button></div>` +
       `<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'bug' })">${t('🐞 Report a problem')}</button><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'game' })">${t('🎮 Ask for a game')}</button><button class="btn" onclick="openWeb('https://github.com/pigeoonn/gantry')">${t('↗ ModForge on GitHub')}</button></div>`;
     document.getElementById('setSearch').value = '';
@@ -3306,7 +3306,7 @@
     if (!cur.ring) root.classList.add('lay-no-ring');
     if (!cur.badges) root.classList.add('lay-no-badges');
     // the tab to start on, once, when the layout first arrives
-    if (!layoutApplied) { layoutApplied = JSON.stringify(cur); try { if (!localStorage.getItem('gantryTab') && cur.tab !== 'mods') setTab(cur.tab, false); } catch (e) {} }
+    if (!layoutApplied) { layoutApplied = JSON.stringify(cur); try { if (!localStorage.getItem('modforgeTab') && !localStorage.getItem('gantryTab') && cur.tab !== 'mods') setTab(cur.tab, false); } catch (e) {} }
   }
   function layoutSend(patch) {
     const cur = Object.assign({}, LAYOUT_DEFAULT, (appState.settings || {}).layout || {}, patch);
@@ -3319,7 +3319,7 @@
   // ---------- Themes ----------
   // `v` are the colours a theme changes; `acc` is the accent it looks best with (used when no accent is chosen)
   const THEMES = {
-    dark: { name: 'Gantry', light: false, v: {}, acc: 'green', sw: ['#12161f', '#1f2533', '#3ddc97'] },
+    dark: { name: 'ModForge', light: false, v: {}, acc: 'green', sw: ['#12161f', '#1f2533', '#3ddc97'] },
     midnight: { name: 'Midnight', light: false, acc: 'violet', sw: ['#120e1d', '#211a35', '#a78bfa'], v: { '--n0': '#07050d', '--n1': '#0c0914', '--n2': '#120e1d', '--n3': '#191328', '--n4': '#211a35', '--text-muted': '#8f88ab' } },
     ember: { name: 'Ember', light: false, acc: 'orange', sw: ['#1c110d', '#2f1f19', '#fb923c'], v: { '--n0': '#0d0806', '--n1': '#140c09', '--n2': '#1c110d', '--n3': '#251813', '--n4': '#2f1f19', '--text-muted': '#a58f84' } },
     forest: { name: 'Forest', light: false, acc: 'green', sw: ['#101a13', '#1d2c22', '#3ddc97'], v: { '--n0': '#060c08', '--n1': '#0a120c', '--n2': '#101a13', '--n3': '#16231a', '--n4': '#1d2c22', '--text-muted': '#86a393' } },
@@ -3637,7 +3637,7 @@
     try { d = await (await fetch(`/api/stats?tz=${new Date().getTimezoneOffset()}${statsAll ? '&all=1' : ''}`)).json(); } catch (e) { return; }
     if (my !== statsSeq || !d) return;
     if (!d.sessions && !statsAll && !(modLibData() || {}).history?.length) {
-      card.innerHTML = `<div class="st-head"><h3>${t('Play time')}</h3></div><div class="lib-empty" style="padding:18px">${t('Nothing played through Gantry yet. Time and crashes are counted from the first game you start here.')}<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn btn-play" onclick="playChecked()">${t('▶ Play Game')}</button></div></div>`;
+      card.innerHTML = `<div class="st-head"><h3>${t('Play time')}</h3></div><div class="lib-empty" style="padding:18px">${t('Nothing played through ModForge yet. Time and crashes are counted from the first game you start here.')}<div class="cp-row" style="justify-content:center; margin-top:12px"><button class="btn btn-play" onclick="playChecked()">${t('▶ Play Game')}</button></div></div>`;
       return;
     }
     const tile = (v, label, cls) => `<div class="st-tile ${cls || ''}"><b>${v}</b><span>${label}</span></div>`;
@@ -3677,7 +3677,7 @@
     if (!d.items.length) { box.innerHTML = `<div class="cd-card">${t('No screenshots yet. Press the Steam screenshot key (F12) in the game.')}</div>`; return; }
     const chips = [['all', t('All'), d.items.length], ['modded', t('With mods'), d.modded], ['plain', t('Without mods'), d.plain]];
     const shown = d.items.filter(i => shotsFilter === 'all' || i.kind === shotsFilter);
-    box.innerHTML = `<div style="color:var(--text-muted); font-size:12.5px;">${t('Pictures taken with Steam\'s screenshot key. “With mods” and “Without mods” come from Gantry\'s own record of when you played.')}</div>
+    box.innerHTML = `<div style="color:var(--text-muted); font-size:12.5px;">${t('Pictures taken with Steam\'s screenshot key. “With mods” and “Without mods” come from ModForge\'s own record of when you played.')}</div>
       <div class="lib-chips">${chips.map(([k, l, n]) => `<button class="lib-chip ${shotsFilter === k ? 'active' : ''}" onclick="setShotsFilter('${k}')">${l} · ${n}</button>`).join('')}</div>
       <div class="shot-grid">${shown.map((i, at) => `<button class="shot" aria-label="${escapeHtml(t('Open the screenshot of {}', new Date(i.at_ms).toLocaleString(LANG)))}" onclick="openShotAt(${at})"><img src="${shotUrl(i.n, true)}" alt="" loading="lazy" onerror="this.remove()">${i.kind === 'unknown' ? '' : `<span class="tag ${i.kind}">${i.kind === 'modded' ? t('With mods') : t('Without mods')}</span>`}</button>`).join('')}</div>`;
     shotsShown = shown;
@@ -3692,7 +3692,7 @@
     document.getElementById('wsModal').classList.add('open');
     let r;
     try { r = await (await fetch('/api/workshop')).json(); } catch (e) { box.textContent = t('Could not load: {}', e); return; }
-    let h = `<div style="color:var(--text-muted); font-size:12.5px;">${t('Steam downloads and updates these itself. Gantry only shows what is there.')}</div>`;
+    let h = `<div style="color:var(--text-muted); font-size:12.5px;">${t('Steam downloads and updates these itself. ModForge only shows what is there.')}</div>`;
     if (r.error) h += `<div class="cd-card" style="color:var(--text-muted);">${t('The names could not be loaded: {}', tm(r.error))}</div>`;
     if (!(r.items || []).length) h += `<div class="cd-card">${t('No Workshop items are installed for this game.')}</div>`;
     (r.items || []).forEach(i => {
@@ -3787,11 +3787,11 @@
     let d;
     try { d = await (await fetch('/api/perf')).json(); } catch (e) { box.textContent = t('Could not scan: {}', e); return; }
     const tips = x => (x || []).map(c => `<div class="cd-card">${escapeHtml(PERF_TIPS()[c] || '')}</div>`).join('');
-    let h = `<div style="color:var(--text-muted)">${t('Gantry measures memory and processor use while a game runs. These are hints to compare against, not a diagnosis.')}</div>`;
+    let h = `<div style="color:var(--text-muted)">${t('ModForge measures memory and processor use while a game runs. These are hints to compare against, not a diagnosis.')}</div>`;
     if (d.last) {
       h += `<div class="cp-h" style="margin-top:12px">${t('Last session')} · ${escapeHtml(ago(d.last.end_ms))} · ${d.last.mods ? tp(d.last.mods, '{} mod on', '{} mods on') : t('without mods')}</div>${perfTiles(d.last.perf, d.last.perf.frames)}${tips(d.last.tips)}`;
     } else {
-      h += `<div class="cd-card">${t('Nothing measured yet. Play a game from Gantry, then come back.')}</div>`;
+      h += `<div class="cd-card">${t('Nothing measured yet. Play a game from ModForge, then come back.')}</div>`;
     }
     if (d.modded && d.modded.sessions && d.plain && d.plain.sessions) {
       const row = (label, x) => `<div class="disk-row"><b>${label}</b><span>${tp(x.sessions, '{} session', '{} sessions')}</span><span>${x.avg_fps ? x.avg_fps + ' FPS · ' : ''}${x.peak_mb} MB · ${x.avg_cpu} %</span></div>`;
@@ -3805,7 +3805,7 @@
     if (d.manual) {
       h += `<div style="color:var(--text-muted)">${escapeHtml(d.manual.name)}</div>${perfTiles(null, d.manual.frames)}${tips(d.manual.tips)}<div class="cp-row" style="margin-top:6px"><button class="btn" onclick="ipcSend('/api/perf_forget', {}); setTimeout(renderPerf, 400)">${t('Close this log')}</button></div>`;
     } else {
-      h += `<div style="color:var(--text-muted)">${appState.os === 'linux' ? t('For frame times, turn on MangoHud (it saves a log when you press Shift+F2 in the game). Gantry reads the log after the session.') : t('A frame-time log of MangoHud can be opened here.')}</div>`;
+      h += `<div style="color:var(--text-muted)">${appState.os === 'linux' ? t('For frame times, turn on MangoHud (it saves a log when you press Shift+F2 in the game). ModForge reads the log after the session.') : t('A frame-time log of MangoHud can be opened here.')}</div>`;
     }
     h += `<div class="cp-row" style="margin-top:8px"><button class="btn" onclick="ipcSend('/api/perf_open', {}); setTimeout(renderPerf, 2500)">${t('Open a MangoHud log')}</button></div>`;
     box.innerHTML = h;
@@ -3937,7 +3937,7 @@
         <div class="dl-sub"><span>${escapeHtml(i.source)}</span>${i.state === 'active' && i.waiting ? `<span>${t('Waiting for the game to close')}</span>` : i.state === 'active' ? `<span>${i.total ? fmtSize(i.done) + ' / ' + fmtSize(i.total) + ' · ' + pct + '%' : (i.done ? fmtSize(i.done) : t('Starting…'))}</span>${i.speed ? `<span>${fmtSpeed(i.speed)}</span>` : ''}${eta ? `<span>${t('{} left', eta)}</span>` : ''}` : `<span>${state}${i.state === 'done' ? ' · ' + fmtSize(i.total) : ''}</span>${i.error ? `<span>${escapeHtml(tm(i.error))}</span>` : ''}${i.finished_ms ? `<span>${escapeHtml(ago(i.finished_ms))}</span>` : ''}`}</div></div>`;
     }).join('') + (items.some(i => i.state !== 'active') ? `<div class="wl-foot"><button class="btn" onclick="ipcSend('/api/downloads_clear', {}); setTimeout(pollDownloads, 150)">${t('Clear finished')}</button></div>` : '') + renderChecks();
   }
-  // the checks and scans Gantry does on its own, under the downloads
+  // the checks and scans ModForge does on its own, under the downloads
   function renderChecks() {
     const bg = dlData.background || {};
     const tasks = bg.tasks || [];
@@ -4080,8 +4080,8 @@
     const broken = what !== 'slow';
     const out = [];
     const add = (cond, label, why, run) => { if (cond) out.push([label, why, run]); };
-    add(broken && how === 'gantry', t('Fix and play'), t('Gantry checks everything, repairs what it can, then starts the game.'), () => playChecked());
-    add(broken && how !== 'gantry', t('🚀 Launch Options'), t('Steam and other launchers only load your mods when they start the game with the right launch option.'), () => openLaunchModal());
+    add(broken && (how === 'gantry' || how === 'modforge'), t('Fix and play'), t('ModForge checks everything, repairs what it can, then starts the game.'), () => playChecked());
+    add(broken && how !== 'gantry' && how !== 'modforge', t('🚀 Launch Options'), t('Steam and other launchers only load your mods when they start the game with the right launch option.'), () => openLaunchModal());
     add(broken && when === 'mod', t('📦 Mod Library'), t('Switch the newest mod off and try again. Then switch your mods back on one by one.'), () => openModLib());
     add(what === 'crash' || (what === 'start' && when === 'mod'), t('🕵️ Crash Detective'), t('Switches your mods off and on in rounds to find the one that breaks the game.'), () => openCrashDetective());
     add(what === 'nothing' || when === 'mod', t('🧭 Fix placement'), t('A mod in the wrong folder does nothing. This moves each mod to where the game looks.'), () => modLibRelayout());
@@ -4091,7 +4091,7 @@
     add(broken, t('🩺 Mod Doctor'), t('Looks for the usual causes: wrong engine version, missing files, old crash dumps.'), () => openDoctor());
     add(what === 'slow', t('🐢 Why is it slow?'), t('Shows where the time goes while you play, and what usually helps.'), () => openPerf());
     add(appState.os === 'linux' && (what === 'slow' || (broken && when === 'update')), t('🛠 Compatibility'), t('Another compatibility tool can run the game better or fix a crash.'), () => openCompat());
-    add(true, t('📋 Problem Report'), t('Copies what Gantry knows about this game, to send to whoever helps you.'), () => copyReport());
+    add(true, t('📋 Problem Report'), t('Copies what ModForge knows about this game, to send to whoever helps you.'), () => copyReport());
     return out;
   }
   function helpRun(i) {
@@ -4118,7 +4118,7 @@
     if (n > 0) row.push(`<button class="btn" onclick="helpBack()">${escapeHtml(t('Back'))}</button>`);
     if (n > 0) row.push(`<button class="btn" onclick="helpAns = []; renderHelp()">${escapeHtml(t('Start over'))}</button>`);
     h += `<div class="cp-row" style="margin-top:4px">${row.join('')}</div><hr style="border-color:rgba(255,255,255,0.1); width:100%">`;
-    if (appState.crash_reports > 0) h += `<div class="cp-note">${escapeHtml(t('Reports of Gantry stopping unexpectedly are kept on this computer ({}). Nothing was sent; read one before you attach it to a bug report.', appState.crash_reports))}</div><div class="cp-row"><button class="btn" onclick="ipcSend('/api/open_crash_reports', {})">${escapeHtml(t('Show the crash reports'))}</button></div>`;
+    if (appState.crash_reports > 0) h += `<div class="cp-note">${escapeHtml(t('Reports of ModForge stopping unexpectedly are kept on this computer ({}). Nothing was sent; read one before you attach it to a bug report.', appState.crash_reports))}</div><div class="cp-row"><button class="btn" onclick="ipcSend('/api/open_crash_reports', {})">${escapeHtml(t('Show the crash reports'))}</button></div>`;
     h += `<div class="cp-row"><button class="btn" onclick="helpDoc('guide')">${escapeHtml(t('Read the guide'))}</button><button class="btn" onclick="helpDoc('faq')">${escapeHtml(t('Questions and answers'))}</button><button class="btn" onclick="closeModals(); openKeys()">${escapeHtml(t('Keyboard shortcuts'))}</button><button class="btn" onclick="closeModals(); tourStep = 0; showTour()">${escapeHtml(t('Show the tour again'))}</button><button class="btn" onclick="ipcSend('/api/open_link', { which: 'report', kind: 'bug' })">${escapeHtml(t('🐞 Report a problem'))}</button></div>`;
     document.getElementById('helpBody').innerHTML = h;
   }
@@ -4170,7 +4170,7 @@
     }).join('');
     const note = d.kind === 'steam'
       ? (d.steam_running ? t('Steam is running. To change its Proton for this game, close Steam first.') : t('This game is started by Steam, so Steam\'s own Proton setting is changed (a backup is kept).'))
-      : t('Gantry starts this game itself, so this choice is used the next time you press Play.');
+      : t('ModForge starts this game itself, so this choice is used the next time you press Play.');
     body.innerHTML = `
       <div><div class="cp-h">${t('Proton version')}</div>
         <div class="cp-row"><select class="proton-select" id="cpTool" style="flex:1">${opts}</select>
@@ -4222,7 +4222,7 @@
     const autoRows = (auto.backups || []).map(b => `<div class="disk-row"><b>${escapeHtml(new Date(b.at_ms).toLocaleString(LANG))}</b><span>${escapeHtml(ago(b.at_ms))} · ${fmtBytes(b.size)}</span><button class="btn" onclick='restoreAutoBackup(${JS(b.name)})'>${t('Restore')}</button></div>`).join('') || `<div class="lib-empty">${t('No automatic backups yet.')}</div>`;
     body.innerHTML = `
       <div><div class="cp-h">${t('Automatic backups')}</div>
-        <div class="cp-note" style="margin:0 0 8px">${t('Once a week Gantry keeps a copy of your settings and mod lists. The newest {} stay.', auto.keep || 8)}</div>
+        <div class="cp-note" style="margin:0 0 8px">${t('Once a week ModForge keeps a copy of your settings and mod lists. The newest {} stay.', auto.keep || 8)}</div>
         ${autoRows}
         <div class="cp-row" style="margin-top:8px"><button class="btn" onclick="autoBackupNow()">${t('Back up now')}</button></div></div>
       <div><div class="cp-h">${t('Backup')}</div>
@@ -4409,7 +4409,7 @@
       sum = t('Nothing is missing: this game is ready for mods.');
       btns = `<button class="btn" onclick="setupGo()">${t('Check again and back up saves')}</button><button class="btn btn-play" onclick="closeSetup()">${t('Close')}</button>`;
     } else {
-      sum = tp(d.changes, 'Gantry will make {} change. Nothing else in the game is touched.', 'Gantry will make {} changes. Nothing else in the game is touched.');
+      sum = tp(d.changes, 'ModForge will make {} change. Nothing else in the game is touched.', 'ModForge will make {} changes. Nothing else in the game is touched.');
       btns = `<button class="btn btn-play" onclick="setupGo()">${t('Do it')}</button><button class="btn" onclick="closeSetup()">${t('Cancel')}</button>`;
     }
     body.innerHTML = `<div class="su-sum">${escapeHtml(sum)}</div>${list}<div class="wl-foot">${btns}</div>`;
@@ -4468,7 +4468,7 @@
       if (sgView && sgView.a) return await renderSaveGuardCompare(box, sgView.a, sgView.b);
       const [r, live] = await Promise.all([(await fetch('/api/saves_list')).json(), (await fetch('/api/saves_files')).json()]);
       sgSnaps = r.snapshots || [];
-      let h = `<div style="color:var(--text-muted);">${t("Gantry copies this game's save files automatically before every launch, mod update, profile switch and compatibility tool change (only when they changed) and keeps the newest ones. Restoring never deletes anything and first backs up what is there now.")}</div>
+      let h = `<div style="color:var(--text-muted);">${t("ModForge copies this game's save files automatically before every launch, mod update, profile switch and compatibility tool change (only when they changed) and keeps the newest ones. Restoring never deletes anything and first backs up what is there now.")}</div>
         <div style="margin:10px 0;"><button class="btn btn-heal" onclick="saveGuardBackup()">${t('💾 Back up now')}</button></div>`;
       const files = live.files || [];
       if (files.length) {
@@ -4726,7 +4726,7 @@
       const p = n.pending;
       const g = selectedGame();
       document.getElementById('nxmContent').innerHTML = `
-        <div class="cd-card">${t('A link on nexusmods.com asked Gantry to download:')}
+        <div class="cd-card">${t('A link on nexusmods.com asked ModForge to download:')}
           <div style="margin-top:6px;">${t('<b>{}</b> · mod #{} · file #{}', escapeHtml(p.game), p.mod_id, p.file_id)}</div>
           ${p.update
             ? `<div style="margin-top:6px;">${t('It is the update you asked for. It will replace: <span class="cd-mods">{}</span> (same place in the load order, same on/off state).', escapeHtml(p.target))}</div>`
@@ -4769,7 +4769,7 @@
       </div>
       <div class="cd-card">
         <div style="font-weight:700;">${t('2 · “Mod Manager Download” button')}</div>
-        <div style="color:var(--text-muted);">${t('Let Gantry open <code>nxm://</code> links, so the button on a mod page sends the mod here (you still confirm each download). This replaces the program that handles those links now; <i>Give back</i> restores it.')}</div>
+        <div style="color:var(--text-muted);">${t('Let ModForge open <code>nxm://</code> links, so the button on a mod page sends the mod here (you still confirm each download). This replaces the program that handles those links now; <i>Give back</i> restores it.')}</div>
         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
           <button class="btn" onclick='if (confirm(${JS(t('Make ModForge the program that opens Nexus Mods links?'))})) ipcSend("/api/nxm_register")'>${t('Use ModForge for Nexus links')}</button>
           <button class="btn" onclick="ipcSend('/api/nxm_unregister')">${t('Give back')}</button>
@@ -5222,7 +5222,7 @@
       const box = document.getElementById('consoleBox');
       box.scrollTop = box.scrollHeight;
     }
-    if (remember) { try { localStorage.setItem('gantryTab', name); } catch (e) {} }
+    if (remember) { try { localStorage.setItem('modforgeTab', name); localStorage.setItem('gantryTab', name); } catch (e) {} }
   }
 
   function renderBadge() {
@@ -5312,7 +5312,7 @@
     const isUpdate = w && w.lib_id;
     let h = `<div class="hb-line warn"><span class="hb-dot"></span><span class="hb-text">`;
     if (q) h += `<b>${escapeHtml(t('Nexus downloads: {} of {} done', q.done, q.total))}</b><span class="nq-bar" aria-hidden="true"><i style="width:${Math.round(100 * q.done / Math.max(1, q.total))}%"></i></span>`;
-    if (w) h += `<span style="display:block">${escapeHtml(t('Waiting for the Nexus download of “{}”', w.name))}</span><small style="display:block; color:var(--text-muted)">${escapeHtml(t('Press “Mod Manager Download” (or “Manual download”) on the page that opened. Gantry installs it as soon as it arrives.'))}</small>`;
+    if (w) h += `<span style="display:block">${escapeHtml(t('Waiting for the Nexus download of “{}”', w.name))}</span><small style="display:block; color:var(--text-muted)">${escapeHtml(t('Press “Mod Manager Download” (or “Manual download”) on the page that opened. ModForge installs it as soon as it arrives.'))}</small>`;
     if (q && q.next && q.next.length) h += `<small style="display:block; color:var(--text-muted)">${escapeHtml(t('Next: {}', q.next.join(', ')))}</small>`;
     h += `</span>`;
     if (w && !isUpdate) h += `<button class="btn" onclick="ipcSend('/api/nexus_queue', { action: 'reopen' })">${t('Open the page again')}</button><button class="btn" onclick="ipcSend('/api/nexus_queue', { action: 'skip' })">${t('Skip')}</button>`;
@@ -5344,7 +5344,7 @@
         frozen: () => t('The game looks frozen: nothing has happened for {} minutes.', a[0]),
         incomplete: () => t('The last start of {} did not finish. Last step: {}', name, a[1]),
         errors: () => t('{} reported a problem: {}', name, a[1]),
-        drift: () => tp(Number(a[0]), '{} deployed file was changed outside Gantry', '{} deployed files were changed outside Gantry'),
+        drift: () => tp(Number(a[0]), '{} deployed file was changed outside ModForge', '{} deployed files were changed outside ModForge'),
         needs: () => t('Missing mods these mods need: {}', a[0]),
         duplicate_mod: () => t('The same mod is installed more than once: {}. Keep one of them.', a[0]),
         game_updated: () => a[0] ? t('The game was updated ({}) since your mods last worked. Mods that run code in the game often break after a patch: {}. Check them for updates first.', a[0], a[1]) : t('The game was updated since your mods last worked. Mods that run code in the game often break after a patch: {}. Check them for updates first.', a[1]),
@@ -5418,7 +5418,7 @@
   }
 
   function switchLoader(kind, label, current) {
-    if (confirm(t('Gantry will remove {} and install {} instead. Your own mods stay. Continue?', current, label))) ipcSend('/api/loader_switch', { kind });
+    if (confirm(t('ModForge will remove {} and install {} instead. Your own mods stay. Continue?', current, label))) ipcSend('/api/loader_switch', { kind });
   }
 
   function focusHealth() {
@@ -5435,7 +5435,7 @@
     setTimeout(refreshHealth, 1500);
   }
   function fixLaunchOption() {
-    if (confirm(t('Gantry will close Steam, set the launch option for your account and open Steam again. Continue?'))) ipcSend('/api/steam_launch_apply', { close_steam: true });
+    if (confirm(t('ModForge will close Steam, set the launch option for your account and open Steam again. Continue?'))) ipcSend('/api/steam_launch_apply', { close_steam: true });
   }
   let healthTick = 0;
   setInterval(() => { if (!document.hidden && (!deckOn || ++healthTick % 3 === 0)) { refreshHealth(); refreshInbox(); } }, 10000);
@@ -5489,7 +5489,7 @@
     if (!p.same_game) h += `<div class="cd-card" style="color:var(--accent-amber)">${t('This setup was made for {}; it will be added to {}.', escapeHtml(p.game), escapeHtml(p.here))}</div>`;
     if (p.note) h += `<div style="margin-bottom:6px">${escapeHtml(p.note)}</div>`;
     h += `<div style="display:flex; flex-wrap:wrap; gap:6px 14px; margin:6px 0 10px">${Object.keys(how).filter(k => c[k]).map(k => `<span>${how[k][0]} <b>${c[k]}</b> ${how[k][1]}</span>`).join('')}</div>`;
-    if (c.nexus && !(appState.nexus || {}).premium) h += `<div class="cp-note" style="margin:0 0 8px">${t('With a free Nexus account each mod from Nexus Mods opens its page: press Slow download and Gantry takes the file.')}</div>`;
+    if (c.nexus && !(appState.nexus || {}).premium) h += `<div class="cp-note" style="margin:0 0 8px">${t('With a free Nexus account each mod from Nexus Mods opens its page: press Slow download and ModForge takes the file.')}</div>`;
     if (c.manual) h += `<div class="cp-note" style="margin:0 0 8px">${t('Mods that were never online cannot travel in a code; ask for a modpack file to get them too.')}</div>`;
     h += `<div style="max-height:calc(42 * var(--vh)); overflow-y:auto">` + (p.mods || []).slice(0, 300).map(x => `<div class="disk-row"><span style="flex:none; width:1.4em">${how[x.how] ? how[x.how][0] : ''}</span><span style="flex:1; min-width:0; overflow-wrap:anywhere"><b style="white-space:normal">${escapeHtml(x.name)}</b>${x.version ? ' <span style="color:var(--text-muted)">v' + escapeHtml(x.version) + '</span>' : ''}${x.enabled ? '' : ' <span style="color:var(--text-muted)">· ' + t('off') + '</span>'}</span><span style="flex:none; color:var(--text-muted); font-size:12px">${how[x.how] ? how[x.how][1] : ''}</span></div>`).join('') + '</div>';
     document.getElementById('importBody').innerHTML = h;
@@ -5507,7 +5507,7 @@
     document.getElementById('placeBody').innerHTML =
       `<div>${why}</div><div class="place-list">${p.folders.map(([dir, n]) => `<div><b>${escapeHtml(dir || t('(the game folder)'))}</b> <span>${tp(n, '{} file', '{} files')}</span></div>`).join('')}</div>` +
       (p.notes ? `<div style="color:var(--text-muted)">${t('Its readme is kept for you to read; it is not copied into the game.')}</div>` : '') +
-      `<div style="color:var(--text-muted)">${t('Gantry remembers your answer for the next mod that looks like this one.')}</div>` +
+      `<div style="color:var(--text-muted)">${t('ModForge remembers your answer for the next mod that looks like this one.')}</div>` +
       (p.more ? `<div style="color:var(--text-muted)">${tp(p.more, '{} more mod is waiting for the same question.', '{} more mods are waiting for the same question.')}</div>` : '');
     m.classList.add('open');
   }
@@ -5574,7 +5574,7 @@
   async function storeGetAll() {
     const nx = storePack.filter(c => c.source === 'nexus').length;
     const free = !(appState.nexus || {}).premium;
-    if (nx && free && !confirm(t('Nexus asks free accounts to press Slow download on each mod\'s page. Gantry will open {} pages one after the other and take each file when you press it. Continue?', nx))) return;
+    if (nx && free && !confirm(t('Nexus asks free accounts to press Slow download on each mod\'s page. ModForge will open {} pages one after the other and take each file when you press it. Continue?', nx))) return;
     for (const c of storePack) {
       if (c.source === 'nexus') ipcSend('/api/nexus_get', { mod_id: Number(c.id) }); else ipcSend('/api/thunder_install', { input: c.id });
       showToast(t('Getting {}…', c.name));
@@ -5601,7 +5601,7 @@
   }
   function storeGetNexus(id, btn, name) {
     ipcSend('/api/nexus_get', { mod_id: Number(id), name: name || '' });
-    showToast((appState.nexus || {}).premium ? t('Getting it from Nexus Mods…') : t('The Nexus page opens: press Slow download and Gantry takes it from there.'));
+    showToast((appState.nexus || {}).premium ? t('Getting it from Nexus Mods…') : t('The Nexus page opens: press Slow download and ModForge takes it from there.'));
     btn.disabled = true;
     setTimeout(() => { btn.disabled = false; }, 6000);
   }
@@ -5740,7 +5740,7 @@
     const my = ++tsSeq;
     const list = document.getElementById('tsList'), sub = document.getElementById('tsSub');
     const repo = document.getElementById('tsSearch').value.trim();
-    if (!repo) { list.innerHTML = `<div class="lib-empty">${t('Paste a GitHub repository link and press Enter. Gantry shows the files of its newest release.')}</div>`; return; }
+    if (!repo) { list.innerHTML = `<div class="lib-empty">${t('Paste a GitHub repository link and press Enter. ModForge shows the files of its newest release.')}</div>`; return; }
     list.innerHTML = `<div class="lib-empty">${t('Loading the mod list…')}</div>`;
     let d = {};
     try { d = await (await fetch('/api/github?repo=' + encodeURIComponent(repo))).json(); } catch (e) { d = { error: 'Could not reach GitHub.' }; }
@@ -5867,7 +5867,7 @@
     const mods = ((appState.library || {}).mods || []).filter(m => m.enabled);
     if (!g || !mods.length) { showToast(t('There are no mods switched on to list.')); return; }
     const lines = mods.map((m, i) => `${i + 1}. ${m.name}${m.version ? ' v' + m.version : ''}${m.nexus && m.nexus.url ? ' — ' + m.nexus.url : ''}`);
-    const text = `**${g.name}**: ${mods.length} ${mods.length === 1 ? 'mod' : 'mods'} (made with Gantry)\n\n${lines.join('\n')}\n`;
+    const text = `**${g.name}**: ${mods.length} ${mods.length === 1 ? 'mod' : 'mods'} (made with ModForge)\n\n${lines.join('\n')}\n`;
     navigator.clipboard.writeText(text).then(() => showToast(t('Copied.')), () => showToast(t('Could not copy.')));
   }
 
@@ -5957,7 +5957,7 @@
       add((tr.current ? '✓ ' : '') + label, tr.current ? null : () => ipcSend('/api/trainer_use', { id: tr.id }));
     });
     (appState.trainer_shelf || []).forEach(tr => {
-      add(t('✕ Remove {}', tr.name), () => { if (confirm(t('Remove the trainer {} from this game? A copy Gantry keeps is deleted; a file elsewhere stays where it is.', tr.name))) ipcSend('/api/trainer_forget', { id: tr.id }); });
+      add(t('✕ Remove {}', tr.name), () => { if (confirm(t('Remove the trainer {} from this game? A copy ModForge keeps is deleted; a file elsewhere stays where it is.', tr.name))) ipcSend('/api/trainer_forget', { id: tr.id }); });
     });
     document.body.appendChild(m);
     const r = e.currentTarget.getBoundingClientRect();
@@ -6066,7 +6066,7 @@
     body.scrollTop = 0;
   }
 
-  // ---- the mod page: what the author wrote, what changed, what it needs, what Gantry placed ----
+  // ---- the mod page: what the author wrote, what changed, what it needs, what ModForge placed ----
   let mpSeq = 0, mpData = null, mpTab = 'desc';
   function openWeb(url) { ipcSend('/api/open_link', { which: 'web', url }); }
   document.addEventListener('click', e => {
@@ -6098,7 +6098,7 @@
   function mpInstallFromStore() {
     const s = mpData && mpData.store;
     if (!s) return;
-    if (s.source === 'nexus') { ipcSend('/api/nexus_get', { mod_id: Number(s.id) }); showToast(s.premium ? t('Getting it from Nexus Mods…') : t('The Nexus page opens: press Slow download and Gantry takes it from there.')); }
+    if (s.source === 'nexus') { ipcSend('/api/nexus_get', { mod_id: Number(s.id) }); showToast(s.premium ? t('Getting it from Nexus Mods…') : t('The Nexus page opens: press Slow download and ModForge takes it from there.')); }
     else if (s.source === 'modio') { ipcSend('/api/modio_install', { id: Number(s.id) }); showToast(t('Getting it from mod.io…')); }
     else { ipcSend('/api/thunder_install', { input: s.id }); showToast(t('Installing {}…', mpData.name || s.id)); }
     closeModals();
@@ -6158,7 +6158,7 @@
   async function openPlugins() {
     let d;
     try { d = await (await fetch('/api/plugins')).json(); } catch (e) { d = { supported: false }; }
-    if (!d.supported) { showToast(t('This game does not have plugins Gantry can order.')); return; }
+    if (!d.supported) { showToast(t('This game does not have plugins ModForge can order.')); return; }
     plg = d;
     document.getElementById('plgTitle').textContent = '🔌 ' + t('Plugins of {}', d.game);
     document.getElementById('plgSortLabel').textContent = t('Sort for me');
@@ -6203,13 +6203,13 @@
     closeModals();
   }
 
-  // ---- what Gantry knows about a game: loader, mod sites, where loose files go, a tip ----
+  // ---- what ModForge knows about a game: loader, mod sites, where loose files go, a tip ----
   async function openPack() {
     let d;
     try { d = await (await fetch('/api/pack')).json(); } catch (e) { d = { error: 'Could not read the game.' }; }
     if (d.error) { showToast(tm(d.error)); return; }
     document.getElementById('packTitle').textContent = '🧩 ' + t('Support entry');
-    document.getElementById('packHelp').innerHTML = escapeHtml(d.existing ? t('This is what Gantry knows about this game. Change it and press Save.') : t('Gantry has no entry for this game yet. This is a draft made from what it can see; fill in what you know and press Save.'))
+    document.getElementById('packHelp').innerHTML = escapeHtml(d.existing ? t('This is what ModForge knows about this game. Change it and press Save.') : t('ModForge has no entry for this game yet. This is a draft made from what it can see; fill in what you know and press Save.'))
       + `<br>${escapeHtml(t('loader: bepinex5, bepinex6 or melonloader. thunderstore: the game\'s community name. nexus: the part after nexusmods.com/. folders: files with these extensions go into that folder when nothing else decides. notes: a tip shown with the game.'))}`
       + `<br>${escapeHtml(t('saves: where the game keeps its saves, so each profile can keep its own. Starting points:') + ' {documents}, {appdata_local}, {appdata_locallow}, {appdata_roaming}, {game}, {home}')}`
       + (d.folders_seen && d.folders_seen.length ? `<br>${escapeHtml(t('Folders in the game: {}', d.folders_seen.join(', ')))}` : '');
@@ -6344,12 +6344,12 @@
       const want = missing.length ? missing : optional, bytes = size(want);
       const parts = missing.length ? [tp(missing.length, '{} mod to get', '{} mods to get'), t('{} to download', fmtSize(bytes))] : [];
       if (optional.length) parts.push(t('{} with the optional ones', fmtSize(size(missing) + size(optional))));
-      parts.push(d.premium ? t('no clicks: Gantry downloads them itself') : tp(want.length, '{} click on the website', '{} clicks on the website'));
+      parts.push(d.premium ? t('no clicks: ModForge downloads them itself') : tp(want.length, '{} click on the website', '{} clicks on the website'));
       html += `<div class="mp-by" style="margin-bottom:8px">${parts.map(escapeHtml).join(' · ')}</div>`;
       // downloads are unpacked next to the game, so about twice the size is needed for a moment
       if (d.free_bytes != null && d.free_bytes < bytes * 2) html += `<div class="mp-note">${t('Not enough free space: {} free on the game\'s drive, about {} needed.', fmtSize(d.free_bytes), fmtSize(bytes * 2))}</div>`;
     }
-    if (!d.premium && !d.other_game) html += `<div class="mp-note" style="background:rgba(255,255,255,0.06); color:var(--soft)">${t('Free accounts: Gantry opens each mod\'s page in turn. Press "Mod Manager Download" there; each mod is installed as it arrives and the next page opens. The Mods tab shows how far it got.')}</div>`;
+    if (!d.premium && !d.other_game) html += `<div class="mp-note" style="background:rgba(255,255,255,0.06); color:var(--soft)">${t('Free accounts: ModForge opens each mod\'s page in turn. Press "Mod Manager Download" there; each mod is installed as it arrives and the next page opens. The Mods tab shows how far it got.')}</div>`;
     if (!missing.length && !optional.length) html += `<div class="lib-empty">${t('Everything in this collection is already in your library.')}</div>`;
     html += d.mods.map(m => `<div class="mp-req"><div class="mp-rn"><b>${escapeHtml(m.name)}</b> <small style="color:var(--text-muted)">v${escapeHtml(m.version)} · ${fmtSize(m.size)}</small></div>
       ${m.optional ? `<span class="ml-pill">${t('optional')}</span>` : ''}
@@ -6415,7 +6415,7 @@
     if (mpTab === 'desc') {
       if (d.summary) html += `<p><b>${escapeHtml(d.summary)}</b></p>`;
       if (d.installed && d.installed.note) html += `<div class="ml-note">${escapeHtml(d.installed.note)}</div>`;
-      html += d.description_html || (d.source === 'local' ? `<div class="lib-empty">${t('This mod has no online page Gantry can show. It was added by hand or without a Nexus or Thunderstore link, so only its instructions and files are here.')}</div>` : '');
+      html += d.description_html || (d.source === 'local' ? `<div class="lib-empty">${t('This mod has no online page ModForge can show. It was added by hand or without a Nexus or Thunderstore link, so only its instructions and files are here.')}</div>` : '');
     } else if (mpTab === 'changes') {
       const list = d.changes || [];
       if (d.previous && d.previous.length) {
@@ -6535,14 +6535,14 @@
     bar.style.display = 'flex';
     bar.innerHTML = `<div class="pk-top"><b>${p.name ? t('The modpack “{}” still needs these mods:', escapeHtml(p.name)) : t('The modpack you imported still needs these mods:')}</b>${nx.length ? `<button class="btn btn-play" onclick="packGetAll()">${t('Get all ({})', nx.length)}</button>` : ''}<button class="btn" onclick="ipcSend('/api/pack_dismiss', {})">${t('Dismiss')}</button></div>
       <ul>${p.mods.map(m => `<li>${m.nexus ? `<a onclick='openNexusPage(${JS(m.nexus.url)})'>${escapeHtml(m.name)}</a>` : escapeHtml(m.name)}${m.version ? ' v' + escapeHtml(m.version) : ''}</li>`).join('')}</ul>
-      ${nx.length && !(appState.nexus || {}).premium ? `<div class="cp-note" style="margin:0">${t('With a free Nexus account each mod opens its page: press Slow download and Gantry takes the file; each one then takes its place from the modpack.')}</div>` : ''}`;
+      ${nx.length && !(appState.nexus || {}).premium ? `<div class="cp-note" style="margin:0">${t('With a free Nexus account each mod opens its page: press Slow download and ModForge takes the file; each one then takes its place from the modpack.')}</div>` : ''}`;
   }
   async function packGetAll() {
     const p = (modLibData() || {}).pending_pack;
     if (!p) return;
     const nx = p.mods.filter(m => m.nexus);
     const free = !(appState.nexus || {}).premium;
-    if (free && !confirm(t('Nexus asks free accounts to press Slow download on each mod\'s page. Gantry will open {} pages one after the other and take each file when you press it. Continue?', nx.length))) return;
+    if (free && !confirm(t('Nexus asks free accounts to press Slow download on each mod\'s page. ModForge will open {} pages one after the other and take each file when you press it. Continue?', nx.length))) return;
     for (const m of nx) {
       ipcSend('/api/nexus_get', { mod_id: Number(m.nexus.mod_id) });
       showToast(t('Getting {}…', m.name));
@@ -6739,7 +6739,7 @@
     const pills = [];
     pills.push(`<span class="ml-pill ${lib.deployed ? 'good' : ''}">${tp(lib.deployed, '{} file deployed', '{} files deployed')}</span>`);
     if (lib.dirty) pills.push(`<span class="ml-pill warn">${t('Changes not deployed yet')}</span>`);
-    if (lib.drift && lib.drift.count) pills.push(`<span class="ml-pill warn" title="${escapeHtml(lib.drift.files.map(f => f.path).join('\n'))}">${tp(lib.drift.count, '{} deployed file was changed outside Gantry', '{} deployed files were changed outside Gantry')}</span>`);
+    if (lib.drift && lib.drift.count) pills.push(`<span class="ml-pill warn" title="${escapeHtml(lib.drift.files.map(f => f.path).join('\n'))}">${tp(lib.drift.count, '{} deployed file was changed outside ModForge', '{} deployed files were changed outside ModForge')}</span>`);
     if (appState.unity && appState.unity.loader) pills.push(`<span class="ml-pill good">${t('Mod loader: {}', appState.unity.loader === 'melonloader' ? 'MelonLoader' : 'BepInEx')}</span>`);
     if (lib.overwrites) pills.push(`<span class="ml-pill">${tp(lib.overwrites, '{} original file will be backed up', '{} original files will be backed up')}</span>`);
     if (lib.conflicts && lib.conflicts.length) pills.push(`<span class="ml-pill warn">${tp(lib.conflicts.length, '⚔ {} conflict', '⚔ {} conflicts')}</span>`);
@@ -6816,7 +6816,7 @@
         <input type="checkbox" ${m.enabled ? 'checked' : ''} onchange='ipcSend("/api/lib_toggle", { id: ${JS(m.id)}, enabled: this.checked })' title="${t('Enable / disable')}">
         <div class="ml-main">
           <div class="ml-name">${dot ? `<span class="ml-dot ${dot[0]}" title="${escapeHtml(dot[1])}"></span>` : ''}<span class="ml-src ${src[0]}" title="${escapeHtml(src[1])}">${src[0] === 'hand' ? '✋' : src[0] === 'nx' ? 'N' : src[0] === 'ts' ? 'TS' : src[0] === 'mio' ? 'io' : 'GH'}</span>${escapeHtml(m.name)}<span class="ml-prio-chip">#${i + 1}</span><span class="ml-tag-btn ${m.group ? 'has-tag' : ''}" onclick='mlChangeGroup(${JS(m.id)}, ${JS(m.group || "")})' title="${escapeHtml(t('Click to change group/tag'))}">${m.group ? escapeHtml(m.group) : t('+tag')}</span> ${m.version ? `<small style="color:var(--text-muted)">v${escapeHtml(m.version)}</small>` : ''}${(m.programs || []).length ? ` <span title="${escapeHtml(t('Contains programs: {}', m.programs.slice(0, 3).join(', ')))}">⚠</span>` : ''}${m.update_rule === 'never' ? ` <span title="${escapeHtml(t('You chose to keep this version: it is never updated.'))}">🔒</span>` : m.update_rule === 'auto' ? ` <span title="${escapeHtml(t('Updates itself when the game is closed.'))}">⟳</span>` : ''} ${m.conflicts ? '<span class="ml-pill warn" style="margin-left:4px">⚔</span>' : ''}</div>
-          ${need ? `<div class="ml-need">⚠ ${t('Needs')}: ${need.missing.map(r => r.page_url ? `<a onclick='openNexusPage(${JS(r.page_url)})' title="${escapeHtml(r.notes || t('Open its Nexus page'))}">↗ ${escapeHtml(r.name)}</a>` : escapeHtml(r.name)).join(', ')}<button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:6px" title="${escapeHtml(nx.premium ? '' : t('Opens their Nexus pages one after another: press Mod Manager Download on each and Gantry installs it.'))}" onclick='ipcSend("/api/nexus_install_needs", { appid: ${JS(need.appid)}, lib_id: ${JS(need.lib_id)} })'>${nx.premium ? t('Install them') : t('Get them')}</button></div>` : ''}
+          ${need ? `<div class="ml-need">⚠ ${t('Needs')}: ${need.missing.map(r => r.page_url ? `<a onclick='openNexusPage(${JS(r.page_url)})' title="${escapeHtml(r.notes || t('Open its Nexus page'))}">↗ ${escapeHtml(r.name)}</a>` : escapeHtml(r.name)).join(', ')}<button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:6px" title="${escapeHtml(nx.premium ? '' : t('Opens their Nexus pages one after another: press Mod Manager Download on each and ModForge installs it.'))}" onclick='ipcSend("/api/nexus_install_needs", { appid: ${JS(need.appid)}, lib_id: ${JS(need.lib_id)} })'>${nx.premium ? t('Install them') : t('Get them')}</button></div>` : ''}
           ${cores.length ? `<div class="ml-need">⚠ ${t('Needs')}: ${cores.map(c => `<span style="white-space:nowrap"><a onclick='openWeb(${JS(c.url)})' title="${escapeHtml(t('Open its page'))}">↗ ${escapeHtml(c.name)}</a><button class="btn" style="padding:1px 8px; font-size:10.5px; margin-left:4px" title="${escapeHtml(t('Installs it from its official releases, with what it needs itself'))}" onclick='ipcSend("/api/core_install", { name: ${JS(c.name)} })'>${t('Install {}', escapeHtml(c.name))}</button></span>`).join(' ')}</div>` : ''}
           ${(m.wins || []).length || (m.loses || []).length ? `<div class="ml-sub wrap">⚔ ${[].concat((m.wins || []).map(w => escapeHtml(tp(w.files, 'wins {} file over {}', 'wins {} files over {}', w.mod))), (m.loses || []).map(w => escapeHtml(tp(w.files, 'loses {} file to {}', 'loses {} files to {}', w.mod)))).join(' · ')}${(m.loses || []).length ? ` <button class="btn" style="padding:1px 8px; font-size:10.5px" onclick='ipcSend("/api/lib_prefer", { winner: ${JS(m.id)}, over: "" })'>${t('Let it win them all')}</button>` : ''} <button class="btn" style="padding:1px 8px; font-size:10.5px" onclick='openLibConflicts(${JS(m.name)})'>${t('Show')}</button></div>` : ''}
           ${m.note ? `<div class="ml-note">${escapeHtml(m.note)}</div>` : ''}
@@ -6844,7 +6844,7 @@
     const emptyActions = `<div class="cp-row" style="justify-content:center; margin-top:14px"><button class="btn btn-play" onclick="openFind('store'); setStoreSort('starter')">${t('Get the starter pack')}</button><button class="btn" onclick="openFind('store')">${t('Find mods')}</button><button class="btn" onclick="ipcSend('/api/lib_install_dialog', {})">${t('＋ Add mod')}</button></div>`;
     const moreBtn = shown.length > mlLimit ? `<button class="btn" style="align-self:center" onclick="mlLimit += 200; renderModLib()">${t('Show {} more', Math.min(200, shown.length - mlLimit))}</button>` : '';
     document.getElementById('mlList').innerHTML = (rows ? rows + moreBtn : '') ||
-      `<div class="lib-empty">${t('No mods yet.<br>Drop a .zip / .7z / .rar anywhere in Gantry, or press “Add mod”. Mods are kept safe in the library and only linked into the game, so you can always go back to vanilla.')}${emptyActions}</div>`;
+      `<div class="lib-empty">${t('No mods yet.<br>Drop a .zip / .7z / .rar anywhere in ModForge, or press “Add mod”. Mods are kept safe in the library and only linked into the game, so you can always go back to vanilla.')}${emptyActions}</div>`;
 
     const conf = (lib.conflicts || []).slice(0, 12).map(c =>
       `<div>⚔ <b>${escapeHtml(c.path)}</b>: ${c.mods.map((n, i) => `<a class="pick ${c.ids[i] === c.winner_id ? 'win' : ''}" title="${escapeHtml(t('Use this one for this file'))}" onclick='pinFile(${JS(c.path)}, ${JS(c.ids[i])})'>${escapeHtml(n)}</a>`).join(' → ')} <span style="color:color-mix(in srgb, #34d399, var(--ink) var(--lift))">${t('({} wins)', escapeHtml(c.winner))}</span>${c.pinned ? ` <a class="pick" title="${escapeHtml(t('Back to the load order'))}" onclick='pinFile(${JS(c.path)}, "")'>📌 ×</a>` : ''}</div>`).join('');
@@ -7118,7 +7118,7 @@
       <div class="cd-card">${acct}</div>
       <div class="cd-card">
         <div style="font-weight:700;">${t('Steam Web API key')}</div>
-        <div style="color:var(--text-muted);">${t('Steam only shows a library to its owner, so Gantry needs your own free key. Open the key page (any domain name works, e.g. <code>localhost</code>), copy the key and paste it here. It stays on this computer in a file only you can read.')}</div>
+        <div style="color:var(--text-muted);">${t('Steam only shows a library to its owner, so ModForge needs your own free key. Open the key page (any domain name works, e.g. <code>localhost</code>), copy the key and paste it here. It stays on this computer in a file only you can read.')}</div>
         <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
           <button class="btn" onclick="ipcSend('/api/open_link', { which: 'steam_key' })">${t('Open the Steam key page')}</button>
         </div>
@@ -7130,7 +7130,7 @@
           <span style="cursor:pointer; color:color-mix(in srgb, #38bdf8, var(--ink) var(--lift));" onclick="ipcSend('/api/steam_refresh', {})">${t('🔄 Refresh now')}</span>
           <span style="cursor:pointer; color:color-mix(in srgb, #f87171, var(--ink) var(--lift));" onclick='if (confirm(${JS(t('Remove the saved key from this computer?'))})) ipcSend("/api/steam_key_clear", {})'>${t('Remove saved key')}</span></div>` : ''}
       </div>
-      <div style="color:var(--text-muted); font-size:11px;">${t('Gantry only reads the list of games you own; it never changes anything on your account. Never paste this key into programs you do not trust.')}</div>`;
+      <div style="color:var(--text-muted); font-size:11px;">${t('ModForge only reads the list of games you own; it never changes anything on your account. Never paste this key into programs you do not trust.')}</div>`;
   }
 
   // ---- API Keys Vault ----
@@ -7346,7 +7346,7 @@
 
   (function bootTabs() {
     let t0 = 'mods';
-    try { t0 = localStorage.getItem('gantryTab') || 'mods'; } catch (e) {}
+    try { t0 = localStorage.getItem('modforgeTab') || localStorage.getItem('gantryTab') || 'mods'; } catch (e) {}
     setTab(t0, false);
   })();
 

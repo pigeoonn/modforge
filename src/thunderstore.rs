@@ -219,7 +219,7 @@ impl Client {
         let url = format!("{}{}", self.base, path);
         self.check(&url)?;
         let (out, err) = curl_ok(
-            Command::new("curl").args(["-sS", "-L", "--max-time", "30", "-A", "Gantry", "-w", "\n%{http_code}", &url]).stdin(Stdio::null()),
+            Command::new("curl").args(["-sS", "-L", "--max-time", "30", "-A", "ModForge", "-w", "\n%{http_code}", &url]).stdin(Stdio::null()),
             None,
         )?;
         let (body, code) = out.rsplit_once('\n').unwrap_or(("", "000"));
@@ -240,7 +240,7 @@ impl Client {
         let url = format!("{}/api/experimental/legacyprofile/get/{}/", self.base, code);
         self.check(&url)?;
         let (out, err) = curl_ok(
-            Command::new("curl").args(["-sS", "-L", "--max-time", "60", "-A", "Gantry", "-w", "\n%{http_code}", &url]).stdin(Stdio::null()),
+            Command::new("curl").args(["-sS", "-L", "--max-time", "60", "-A", "ModForge", "-w", "\n%{http_code}", &url]).stdin(Stdio::null()),
             None,
         )?;
         let (body, status) = out.rsplit_once('\n').unwrap_or(("", "000"));
@@ -283,7 +283,7 @@ impl Client {
         let url = format!("{}/c/{}/api/v1/package/", self.base, community);
         self.check(&url)?;
         let (out, err) = curl_ok(
-            Command::new("curl").args(["-sS", "-L", "--compressed", "--max-time", "120", "-A", "Gantry", "-w", "\n%{http_code}", &url]).stdin(Stdio::null()),
+            Command::new("curl").args(["-sS", "-L", "--compressed", "--max-time", "120", "-A", "ModForge", "-w", "\n%{http_code}", &url]).stdin(Stdio::null()),
             None,
         )?;
         let (body, code) = out.rsplit_once('\n').unwrap_or(("", "000"));
@@ -364,7 +364,7 @@ impl Client {
     /// Download a package archive (a CDN address; nothing identifying is sent).
     pub fn download(&self, url: &str, dest: &Path) -> Result<(), String> {
         self.check(url)?;
-        crate::downloads::fetch(url, dest, Some("Gantry"), "Thunderstore")
+        crate::downloads::fetch(url, dest, Some("ModForge"), "Thunderstore")
     }
 }
 

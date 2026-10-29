@@ -181,7 +181,8 @@ pub fn clean_code(input: &str) -> Option<String> {
 }
 
 /// Gantry's own share code: a setup as one line of text, made and read without going online.
-pub const SHARE_PREFIX: &str = "GANTRY1:";
+pub const SHARE_PREFIX: &str = "MODFORGE1:";
+pub const LEGACY_SHARE_PREFIX: &str = "GANTRY1:";
 /// A code longer than this is not something anyone pasted on purpose.
 const SHARE_MAX: usize = 200_000;
 const SHARE_MODS_MAX: usize = 1000;
@@ -264,7 +265,7 @@ pub fn share_code(spec: &ProfileSpec) -> (String, usize) {
 
 /// Is this text a Gantry share code (and not a Thunderstore one)?
 pub fn is_share_code(text: &str) -> bool {
-    text.trim().starts_with(SHARE_PREFIX)
+    text.trim().starts_with(SHARE_PREFIX) || text.trim().starts_with(LEGACY_SHARE_PREFIX)
 }
 
 /// A share code back into a setup. Anything that is not a mod with a source Gantry knows is dropped.
@@ -274,7 +275,7 @@ pub fn from_share_code(text: &str, game: &str) -> Result<ProfileSpec, String> {
     if t.len() > SHARE_MAX {
         return Err(bad());
     }
-    let raw = base64_decode(t.strip_prefix(SHARE_PREFIX).ok_or_else(bad)?).ok_or_else(bad)?;
+    let raw = base64_decode((t.strip_prefix(SHARE_PREFIX).or_else(|| t.strip_prefix(LEGACY_SHARE_PREFIX))).ok_or_else(bad)?).ok_or_else(bad)?;
     let v: serde_json::Value = serde_json::from_slice(&raw).map_err(|_| bad())?;
     let mods: Vec<SpecMod> = v["m"]
         .as_array()
@@ -298,14 +299,14 @@ pub fn from_share_code(text: &str, game: &str) -> Result<ProfileSpec, String> {
         })
         .collect();
     if mods.is_empty() {
-        return Err("This share code has no mods Gantry can fetch.".into());
+        return Err("This share code has no mods ModForge can fetch.".into());
     }
     Ok(ProfileSpec { gantry_profile: 1, game: game.to_string(), mods, name: short(v["n"].as_str().unwrap_or(""), 80), note: String::new() })
 }
 
 /// The game a share code was made for, as its maker's Gantry named it.
 pub fn share_code_game(text: &str) -> Option<String> {
-    let raw = base64_decode(text.trim().strip_prefix(SHARE_PREFIX)?)?;
+    let raw = base64_decode((text.trim().strip_prefix(SHARE_PREFIX).or_else(|| text.trim().strip_prefix(LEGACY_SHARE_PREFIX)))?)?;
     serde_json::from_slice::<serde_json::Value>(&raw).ok()?["g"].as_str().map(|g| short(g, 200))
 }
 

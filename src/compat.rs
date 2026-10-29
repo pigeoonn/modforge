@@ -135,7 +135,7 @@ pub fn pick_ge(release: &Value, allowed: &str) -> Option<GeRelease> {
 
 fn curl_bytes(url: &str, max_secs: &str) -> Result<Vec<u8>, String> {
     let out = Command::new("curl")
-        .args(["-fsSL", "--max-time", max_secs, "-H", "User-Agent: Gantry", "-H", "Accept: application/vnd.github+json"])
+        .args(["-fsSL", "--max-time", max_secs, "-H", "User-Agent: ModForge", "-H", "Accept: application/vnd.github+json"])
         .arg(url)
         .stdin(Stdio::null())
         .output()

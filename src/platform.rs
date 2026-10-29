@@ -256,7 +256,7 @@ pub fn notify(title: &str, body: &str) {
         c
     } else {
         let mut c = Command::new("notify-send");
-        c.args(["-a", "Gantry", title, body]);
+        c.args(["-a", "ModForge", title, body]);
         c
     };
     let _ = c.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status();

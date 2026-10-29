@@ -1030,7 +1030,7 @@ impl RepairEngine {
                     ),
                     Some((maj, min)) => format!("UE4SS-settings.ini does not state the engine version ({}.{}).", maj, min),
                     None => format!(
-                        "UE4SS-settings.ini forces version {}.{} but Gantry cannot confirm it for this game. Press Self-Heal to switch back to automatic detection.",
+                        "UE4SS-settings.ini forces version {}.{} but ModForge cannot confirm it for this game. Press Self-Heal to switch back to automatic detection.",
                         forced.0, forced.1
                     ),
                 });

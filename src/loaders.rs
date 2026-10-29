@@ -368,7 +368,7 @@ pub fn pick_be_build(html: &str, base: &str, il2cpp: bool, x64: bool) -> Option<
 
 fn http_get(url: &str) -> Result<Vec<u8>, String> {
     let out = Command::new("curl")
-        .args(["-sSL", "--max-time", "30", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Gantry"])
+        .args(["-sSL", "--max-time", "30", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: ModForge"])
         .arg(url)
         .stdin(Stdio::null())
         .output()

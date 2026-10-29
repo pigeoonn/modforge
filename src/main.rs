@@ -651,7 +651,7 @@ fn report_repaired(state: &SharedState) {
     for (path, ok) in fsutil::take_repaired() {
         let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
         let text = if ok {
-            format!("{} was damaged and could not be read. Gantry used the copy from before its last change; the damaged file is kept next to it.", name)
+            format!("{} was damaged and could not be read. ModForge used the copy from before its last change; the damaged file is kept next to it.", name)
         } else {
             format!("{} was damaged and there was no good copy of it. The damaged file is kept next to it (in {}).", name, path.parent().map(|p| p.display().to_string()).unwrap_or_default())
         };
@@ -672,7 +672,7 @@ impl AppState {
         st.log(
             "INFO",
             format!(
-                "Gantry ready in {:.2}ms ({} games indexed).",
+                "ModForge ready in {:.2}ms ({} games indexed).",
                 elapsed_ms,
                 st.games.len()
             ),
@@ -1555,7 +1555,7 @@ fn watch_trainer(state: &SharedState, g: &GameEntry, trainer: &Path, started: &t
             match (trainer_pfx, game_pfx) {
                 (Some(t), Some(gp)) if t != gp => {
                     set_trainer_run(state, g, &file, "elsewhere", pid, secs);
-                    log(state, "WARN", format!("The trainer runs, but in another Wine prefix than the game ({} instead of {}), so it cannot reach the game. Start the game through Gantry or Steam, then Run Trainer again.", t, gp));
+                    log(state, "WARN", format!("The trainer runs, but in another Wine prefix than the game ({} instead of {}), so it cannot reach the game. Start the game through ModForge or Steam, then Run Trainer again.", t, gp));
                 }
                 _ => {
                     set_trainer_run(state, g, &file, "attached", pid, secs);
@@ -1580,7 +1580,7 @@ fn watch_trainer(state: &SharedState, g: &GameEntry, trainer: &Path, started: &t
             }
             None => {
                 set_trainer_run(state, g, &file, "unseen", 0, secs);
-                log(state, "INFO", "The trainer was started, but Gantry cannot see it among the game's processes yet. If its window does not show up, see the trainer log under Logs.");
+                log(state, "INFO", "The trainer was started, but ModForge cannot see it among the game's processes yet. If its window does not show up, see the trainer log under Logs.");
             }
         },
     }
@@ -2061,7 +2061,7 @@ fn thunder_community_for(state: &SharedState, g: &GameEntry) -> Result<String, S
             },
         }
     };
-    thunderstore::match_community(&g.name, &list).ok_or_else(|| format!("Gantry could not tell which Thunderstore community {} belongs to.", g.name))
+    thunderstore::match_community(&g.name, &list).ok_or_else(|| format!("ModForge could not tell which Thunderstore community {} belongs to.", g.name))
 }
 
 /// All packages of a community, kept on disk for a few hours (the list is several MB).
@@ -2462,7 +2462,7 @@ fn spawn_auto_backup(state: Weak<RwLock<AppState>>) {
         }
         if asked || autobackup::due(&dir, now_ms()) {
             match run_auto_backup(st) {
-                Ok(_) => log(st, "INFO", "Weekly backup of Gantry's settings and mod lists made."),
+                Ok(_) => log(st, "INFO", "Weekly backup of ModForge's settings and mod lists made."),
                 Err(e) => {
                     log(st, "WARN", format!("Weekly backup failed: {}", e));
                     return Err(e);
@@ -2551,7 +2551,7 @@ fn restore_libraries(state: &SharedState, v: &Value) -> (usize, usize, usize) {
 /// game's mod list wherever its mods are still in the library.
 fn restore_bundle(state: &SharedState, v: &Value) -> Result<String, String> {
     if v.get("gantry_backup").and_then(Value::as_u64) != Some(1) {
-        return Err("This file is not a Gantry backup.".into());
+        return Err("This file is not a ModForge backup.".into());
     }
     running_guard(state)?;
     let cfg: RigConfigData = serde_json::from_value(v["config"].clone()).map_err(|_| "The settings in this backup are not readable.".to_string())?;
@@ -2656,7 +2656,7 @@ fn sync_pull(state: &SharedState) -> Result<String, String> {
     let newest = autobackup::list(&dir).into_iter().next().ok_or("There is nothing in the sync folder yet.")?;
     let v = autobackup::read(&dir, &newest.name)?;
     if v.get("gantry_backup").and_then(Value::as_u64) != Some(1) {
-        return Err("This file is not a Gantry backup.".into());
+        return Err("This file is not a ModForge backup.".into());
     }
     running_guard(state)?;
     {
@@ -2886,7 +2886,7 @@ fn read_pack_file(state: &SharedState, path: &Path) -> Result<(deploy::ProfileSp
             Some(s) => Ok((s, Some(dir))),
             None => {
                 let _ = fs::remove_dir_all(&dir);
-                Err("This file is not a Gantry modpack.".into())
+                Err("This file is not a ModForge modpack.".into())
             }
         }
     } else {
@@ -3615,7 +3615,7 @@ fn nexus_get_mod(state: &SharedState, mod_id: u64, name: &str) {
             st.notifier.bump();
         }
         open_nexus_files_page(state, &domain, mod_id);
-        return log(state, "INFO", format!("Opened the Nexus page of {}. Press its Mod Manager Download button; Gantry installs it by itself.", name));
+        return log(state, "INFO", format!("Opened the Nexus page of {}. Press its Mod Manager Download button; ModForge installs it by itself.", name));
     }
     match nexus_main_file(&client, &domain, mod_id) {
         Ok(file_id) => nexus_fetch_and_install(state, &g, &nexus::NxmLink { game: domain, mod_id, file_id, key: None, expires: None }, None),
@@ -3739,26 +3739,26 @@ fn self_update(state: &SharedState) {
         (st.self_target.clone(), st.new_version.clone(), st.github_api.clone(), st.github_allow.clone())
     };
     let Some(target) = target else {
-        return log(state, "WARN", "This copy of Gantry cannot update itself. Update it the way you installed it, or download the new version.");
+        return log(state, "WARN", "This copy of ModForge cannot update itself. Update it the way you installed it, or download the new version.");
     };
     let Some(tag) = tag.filter(|t| !t.is_empty() && t.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')) else {
-        return log(state, "INFO", "There is no newer Gantry to put in place. Use Check for a newer Gantry first.");
+        return log(state, "INFO", "There is no newer ModForge to put in place. Use Check for a newer ModForge first.");
     };
     let curl = |url: &str| -> Option<Vec<u8>> {
-        let out = Command::new("curl").args(["-fsSL", "--max-time", "60", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Gantry"]).arg(url).stdin(Stdio::null()).output().ok()?;
+        let out = Command::new("curl").args(["-fsSL", "--max-time", "60", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: ModForge"]).arg(url).stdin(Stdio::null()).output().ok()?;
         out.status.success().then_some(out.stdout)
     };
     let release = curl(&format!("{}/repos/{}/{}/releases/tags/{}", api, SELF_REPO.0, SELF_REPO.1, tag)).and_then(|b| serde_json::from_slice::<Value>(&b).ok());
     let picked = release.as_ref().and_then(|r| selfupdate::pick_asset(&r["assets"], cfg!(windows), std::env::consts::ARCH));
     let Some((name, url, sum_url)) = picked else {
-        return log(state, "WARN", format!("Gantry {} has no file for this kind of install (or no checksum), so it cannot be put in place. Download it from the release page.", tag));
+        return log(state, "WARN", format!("ModForge {} has no file for this kind of install (or no checksum), so it cannot be put in place. Download it from the release page.", tag));
     };
     if ![&url, &sum_url].iter().all(|u| github::download_ok(u, SELF_REPO.0, SELF_REPO.1, allow.as_deref())) || name.contains("..") || name.contains('/') || name.contains('\\') {
-        return log(state, "ERR", "Refusing a download that is not from Gantry's own releases.");
+        return log(state, "ERR", "Refusing a download that is not from ModForge's own releases.");
     }
     let dir = read_state(state).cache_root().join("drops").join(fsutil::unique_token());
     let dest = dir.join(&name);
-    log(state, "INFO", format!("Downloading Gantry {}...", tag));
+    log(state, "INFO", format!("Downloading ModForge {}...", tag));
     let got = fs::create_dir_all(&dir).is_ok()
         && Command::new("curl")
             .args(["-fL", "--retry", "2", "--connect-timeout", "15", "--max-time", "1800", "-sS", "-o"])
@@ -3804,16 +3804,16 @@ fn self_update(state: &SharedState) {
                 st.update_ready = Some(tag.clone());
                 st.notifier.bump();
             }
-            log(state, "OK", format!("Gantry {} is in place. Close Gantry and open it again to use it.", tag));
+            log(state, "OK", format!("ModForge {} is in place. Close ModForge and open it again to use it.", tag));
         }
-        Err(e) => log(state, "ERR", format!("Could not replace this copy of Gantry: {}", e)),
+        Err(e) => log(state, "ERR", format!("Could not replace this copy of ModForge: {}", e)),
     }
 }
 
 /// Check for a newer Gantry once a day and say so once per version. Quiet when GitHub does not answer.
 fn spawn_self_update_check(state: Weak<RwLock<AppState>>) {
     let mut told = String::new();
-    spawn_background(state, "gantry_update", "Looking for a newer Gantry", Duration::from_secs(40), Duration::from_secs(24 * 3600), Box::new(move |st, _| {
+    spawn_background(state, "gantry_update", "Looking for a newer ModForge", Duration::from_secs(40), Duration::from_secs(24 * 3600), Box::new(move |st, _| {
         if let Some((tag, _)) = newer_gantry(st) {
             write_state(st).new_version = Some(tag.clone());
             if tag != told {
@@ -4059,7 +4059,7 @@ fn install_loader_inner(state: &SharedState, g: &GameEntry, kind: &str, switchin
         return true;
     }
     if let Some(ac) = deploy::anti_cheat(Path::new(&g.game_dir)) {
-        log(state, "WARN", format!("This game uses {ac}. Mod loaders can get your account banned, so Gantry will not install one."));
+        log(state, "WARN", format!("This game uses {ac}. Mod loaders can get your account banned, so ModForge will not install one."));
         return false;
     }
     if read_state(state).is_running.load(Ordering::SeqCst) {
@@ -6476,7 +6476,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             let state_bg = Arc::clone(state);
             let lang = read_state(state).config.language.clone();
             thread::spawn(move || {
-                let Some(path) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Save a backup of Gantry")).set_file_name("gantry-backup.json").save_file() else { return };
+                let Some(path) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Save a backup of ModForge")).set_file_name("gantry-backup.json").save_file() else { return };
                 match serde_json::to_string_pretty(&backup_bundle(&state_bg)).map_err(|e| e.to_string()).and_then(|j| fsutil::atomic_write(&path, j).map_err(|e| e.to_string())) {
                     Ok(()) => log(&state_bg, "OK", format!("Backup saved to {}.", path.display())),
                     Err(e) => log(&state_bg, "ERR", e),
@@ -6492,7 +6492,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                     .map_err(|e| e.to_string())
                     .and_then(|m| if m.len() > 20_000_000 { Err("That file is too large to be a backup.".to_string()) } else { Ok(()) })
                     .and_then(|_| fs::read(&path).map_err(|e| e.to_string()))
-                    .and_then(|b| serde_json::from_slice::<Value>(&b).map_err(|_| "This file is not a Gantry backup.".to_string()));
+                    .and_then(|b| serde_json::from_slice::<Value>(&b).map_err(|_| "This file is not a ModForge backup.".to_string()));
                 match parsed.and_then(|v| restore_bundle(&state_bg, &v)) {
                     Ok(m) => log(&state_bg, "OK", m),
                     Err(e) => log(&state_bg, "ERR", e),
@@ -6508,7 +6508,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 let spec = lib.export_spec(&g.name);
                 let Some(path) = rfd::FileDialog::new()
                     .set_title(i18n::tr(&lang, "Save this setup"))
-                    .set_file_name(format!("{} setup.gantry.json", g.name))
+                    .set_file_name(format!("{} setup.modforge.json", g.name))
                     .save_file()
                 else {
                     return;
@@ -6524,7 +6524,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             let lang = read_state(state).config.language.clone();
             thread::spawn(move || {
                 let Some(g) = selected_game(&state_bg).filter(|g| g.is_installed) else { return };
-                let Some(path) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Open a modpack")).add_filter(i18n::tr(&lang, "Gantry modpack"), &["gantrypack", "zip", "json"]).pick_file() else { return };
+                let Some(path) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Open a modpack")).add_filter(i18n::tr(&lang, "ModForge modpack"), &["gantrypack", "zip", "json"]).pick_file() else { return };
                 if let Err(e) = read_pack_file(&state_bg, &path).and_then(|(spec, files)| preview_import(&state_bg, &g, spec, files)) {
                     log(&state_bg, "ERR", e);
                 }
@@ -6543,7 +6543,7 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                     PathBuf::from(target_path)
                 } else {
                     let ext = if full { "zip" } else { "gantrypack" };
-                    let filter_desc = if full { "Modpack Archive (.zip)" } else { "Gantry modpack" };
+                    let filter_desc = if full { "Modpack Archive (.zip)" } else { "ModForge modpack" };
                     let Some(p) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Save the modpack")).add_filter(filter_desc, &[ext]).set_file_name(format!("{label}.{ext}")).save_file() else { return };
                     p
                 };
@@ -6645,12 +6645,12 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 Some((tag, _)) => {
                     write_state(&state_bg).new_version = Some(tag.clone());
                     write_state(&state_bg).notifier.bump();
-                    log(&state_bg, "OK", format!("A newer Gantry is available: {tag}."));
+                    log(&state_bg, "OK", format!("A newer ModForge is available: {tag}."));
                 }
                 None => {
                     write_state(&state_bg).new_version = None;
                     write_state(&state_bg).notifier.bump();
-                    log(&state_bg, "OK", "You have the newest Gantry.");
+                    log(&state_bg, "OK", "You have the newest ModForge.");
                 }
             });
         }
@@ -7637,7 +7637,7 @@ fn install_core(state: &SharedState, g: &GameEntry, core: &frameworks::Core) -> 
     let (owner, repo) = core.repo.split_once('/').ok_or("No release source is known.")?;
     let rel = github::latest(owner, repo, &api, allow.as_deref())?;
     let names: Vec<String> = rel.assets.iter().map(|a| a.name.clone()).collect();
-    let file = core.pick(&names).ok_or_else(|| format!("The newest release of {} has no file Gantry recognises.", core.name))?;
+    let file = core.pick(&names).ok_or_else(|| format!("The newest release of {} has no file ModForge recognises.", core.name))?;
     let url = rel.assets.iter().find(|a| &a.name == file).map(|a| a.url.clone()).unwrap_or_default();
     let reference = github::GithubRef::from_download(&url);
     github_install_named(state, g, core.repo, &url, reference, Some(core.name));
@@ -7678,7 +7678,7 @@ fn full_setup_for(state: &SharedState, g: &GameEntry, close_steam: bool) {
     }
     let (steps, blocked) = setup_steps(state, g);
     if let Some(ac) = blocked {
-        log(state, "WARN", format!("This game uses {ac}. Mod loaders can get your account banned, so Gantry will not install one."));
+        log(state, "WARN", format!("This game uses {ac}. Mod loaders can get your account banned, so ModForge will not install one."));
         return setup_refused(state, g, "This game uses {}. Modified files can get your account banned, so play without mods.", &ac);
     }
     let installs = steps.iter().any(|s| ["loader", "ue4ss"].contains(&s.id.as_str()) || s.id.starts_with("core:"));
@@ -7688,11 +7688,11 @@ fn full_setup_for(state: &SharedState, g: &GameEntry, close_steam: bool) {
             state,
             "INFO",
             format!(
-                "Nothing to set up for {}: it is not an Unreal Engine game, so UE4SS does not apply. DLL, PAK and archive mods can still be dragged onto Gantry.",
+                "Nothing to set up for {}: it is not an Unreal Engine game, so UE4SS does not apply. DLL, PAK and archive mods can still be dragged onto ModForge.",
                 g.name
             ),
         );
-        return setup_refused(state, g, "Nothing to set up for this game. Mods can be dragged onto Gantry as they are.", "");
+        return setup_refused(state, g, "Nothing to set up for this game. Mods can be dragged onto ModForge as they are.", "");
     }
     {
         let mut st = write_state(state);
@@ -7926,19 +7926,19 @@ fn sync_to_steam(state: &SharedState, appid: Option<&str>, close_steam: bool) ->
 
     let is_modforge = appid.is_none() || appid == Some("") || appid == Some("modforge");
     if is_modforge {
-        let exe = selfupdate::target().or_else(|| std::env::current_exe().ok()).ok_or("Gantry could not tell where it is installed.")?;
+        let exe = selfupdate::target().or_else(|| std::env::current_exe().ok()).ok_or("ModForge could not tell where it is installed.")?;
         let (exe_s, dir_s) = (exe.to_string_lossy().to_string(), exe.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default());
         let mut todo = Vec::new();
         for path in &configs {
             let old = fs::read(path).unwrap_or_default();
             match steamshortcut::has_gantry(&old, &exe_s) {
-                None => return Err("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.".into()),
+                None => return Err("Steam's shortcuts file has a form ModForge does not know, so it was left as it is.".into()),
                 Some(true) => {}
                 Some(false) => todo.push((path.clone(), old)),
             }
         }
         if todo.is_empty() {
-            return Ok("Gantry is already in Steam's library.".into());
+            return Ok("ModForge is already in Steam's library.".into());
         }
         let mut restart = false;
         if env.running() {
@@ -7948,7 +7948,7 @@ fn sync_to_steam(state: &SharedState, appid: Option<&str>, close_steam: bool) ->
             if games.iter().any(procs::is_game_running) {
                 return Err("A game is running. Close it first: Steam would end it too.".into());
             }
-            log(state, "INFO", "Closing Steam to add Gantry to its library...");
+            log(state, "INFO", "Closing Steam to add ModForge to its library...");
             shutdown_steam(&env)?;
             restart = true;
         }
@@ -7966,7 +7966,7 @@ fn sync_to_steam(state: &SharedState, appid: Option<&str>, close_steam: bool) ->
             c.arg("-silent").stdout(Stdio::null()).stderr(Stdio::null());
             spawn_reaped(c);
         }
-        return Ok("Gantry is in Steam's library now. It opens in controller mode from Big Picture and on a Steam Deck.".into());
+        return Ok("ModForge is in Steam's library now. It opens in controller mode from Big Picture and on a Steam Deck.".into());
     }
 
     // Syncing a specific game (custom standalone game or modded Steam game shortcut)
@@ -7992,7 +7992,7 @@ fn sync_to_steam(state: &SharedState, appid: Option<&str>, close_steam: bool) ->
     for path in &configs {
         let old = fs::read(path).unwrap_or_default();
         if steamshortcut::has_shortcut(&old, &name, &exe_s).is_none() && !old.is_empty() {
-            return Err("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.".into());
+            return Err("Steam's shortcuts file has a form ModForge does not know, so it was left as it is.".into());
         }
         todo.push((path.clone(), old));
     }
@@ -8005,7 +8005,7 @@ fn sync_to_steam(state: &SharedState, appid: Option<&str>, close_steam: bool) ->
         if games.iter().any(procs::is_game_running) {
             return Err("A game is running. Close it first: Steam would end it too.".into());
         }
-        log(state, "INFO", "Closing Steam to add Gantry to its library...");
+        log(state, "INFO", "Closing Steam to add ModForge to its library...");
         shutdown_steam(&env)?;
         restart = true;
     }
@@ -8689,7 +8689,7 @@ fn modio_game_for(state: &SharedState, g: &GameEntry) -> Result<u64, String> {
     let want = norm(&g.name);
     let hit = found.iter().find(|x| norm(&x.name) == want).ok_or_else(|| format!("mod.io has no game called {}.", g.name))?;
     if !hit.open {
-        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so Gantry cannot download them.", hit.name));
+        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so ModForge cannot download them.", hit.name));
     }
     known.insert(g.appid.clone(), hit.id);
     let _ = fsutil::atomic_write(&file, serde_json::to_string(&known).unwrap_or_default());
@@ -8724,7 +8724,7 @@ fn modio_game_set(state: &SharedState, g: &GameEntry, id: u64) -> Result<String,
     let client = modio_client(state)?;
     let game = client.game(id)?.ok_or("mod.io has no such game or mod.")?;
     if !game.open {
-        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so Gantry cannot download them.", game.name));
+        return Err(format!("The makers of {} only allow their mod.io mods to be used inside the game, so ModForge cannot download them.", game.name));
     }
     {
         let mut st = write_state(state);
@@ -9292,7 +9292,7 @@ fn plugins_json(state: &SharedState, sort: bool) -> Value {
 
 /// Write `plugins.txt` for the selected game (the first version is kept next to it).
 fn plugins_save(state: &SharedState, order: &[(String, bool)]) -> Result<String, String> {
-    let (g, layout, data) = plugin_game(state).ok_or("This game does not have plugins Gantry can order.")?;
+    let (g, layout, data) = plugin_game(state).ok_or("This game does not have plugins ModForge can order.")?;
     if read_state(state).is_running.load(Ordering::SeqCst) {
         return Err("Close the game first: it reads the plugin list when it starts.".into());
     }
@@ -9374,7 +9374,7 @@ fn find_everywhere(state: &SharedState, q: &str) -> Value {
             modio_client(state)?.mods(id, &modio::Query { text: q.to_string(), sort: "downloads".into(), offset: 0, limit: 20 }).map(|(l, _)| l)
         });
         fn gone<T>() -> Result<T, String> {
-            Err("Gantry could not finish this search.".to_string())
+            Err("ModForge could not finish this search.".to_string())
         }
         (nx.join().unwrap_or_else(|_| gone()), ts.join().unwrap_or_else(|_| gone()), mio.join().unwrap_or_else(|_| gone()))
     });
@@ -9547,7 +9547,7 @@ fn collection_install(state: &SharedState, link: &str, optional: bool) {
             }
             queue_counted(&mut st, queued);
             drop(st);
-            log(state, "INFO", format!("Collection “{}”: {} mods queued. Press Mod Manager Download on each page that opens; Gantry installs each one.", v["name"].as_str().unwrap_or(""), queued));
+            log(state, "INFO", format!("Collection “{}”: {} mods queued. Press Mod Manager Download on each page that opens; ModForge installs each one.", v["name"].as_str().unwrap_or(""), queued));
             nexus_queue_next(state);
             return Ok(());
         }
@@ -9646,10 +9646,10 @@ fn nxm_request(state: &SharedState, url: &str) -> Result<String, String> {
             return Ok(msg);
         }
     }
-    add_note(state, "waiting", "Open Gantry to confirm the Nexus download.", "");
+    add_note(state, "waiting", "Open ModForge to confirm the Nexus download.", "");
     if !cfg!(test) {
         let lang = read_state(state).config.language.clone();
-        platform::notify(&i18n::tr(&lang, "Mod download waiting"), &i18n::tr(&lang, "Open Gantry to confirm the Nexus download."));
+        platform::notify(&i18n::tr(&lang, "Mod download waiting"), &i18n::tr(&lang, "Open ModForge to confirm the Nexus download."));
     }
     Ok(msg)
 }
@@ -9826,7 +9826,7 @@ fn nexus_queue_next(state: &SharedState) {
     } else {
         open_nexus_files_page(state, &w.game, w.mod_id);
     }
-    log(state, "INFO", format!("Opened the Nexus page of {}. Press its Mod Manager Download button; Gantry installs it by itself.", w.name));
+    log(state, "INFO", format!("Opened the Nexus page of {}. Press its Mod Manager Download button; ModForge installs it by itself.", w.name));
     if more > 0 {
         log(state, "INFO", format!("{} more are waiting for it; each page opens when the one before is done.", more));
     }
@@ -10138,7 +10138,7 @@ fn nexus_update(state: &SharedState, appid: &str, lib_id: &str) {
     log(
         state,
         "INFO",
-        format!("Opened the Nexus page of '{}'. Press its Mod Manager Download button; Gantry will ask once and install it as the update.", row.name),
+        format!("Opened the Nexus page of '{}'. Press its Mod Manager Download button; ModForge will ask once and install it as the update.", row.name),
     );
 }
 
@@ -10214,7 +10214,7 @@ fn spawn_update_checker(state: Weak<RwLock<AppState>>) {
         };
         if n > told {
             add_note(st, "updates", format!("Mod updates: {}", digest), "");
-            let tail = i18n::tr(&lang, "Open Gantry and press Update all.");
+            let tail = i18n::tr(&lang, "Open ModForge and press Update all.");
             platform::notify(&i18n::tr(&lang, "Mod updates available"), &if summary.is_empty() { tail } else { format!("{summary}\n{tail}") });
         }
         told = n;
@@ -10383,7 +10383,7 @@ fn check_github_updates(state: &SharedState) -> usize {
 /// Install the newer release of one mod from GitHub.
 fn github_update_apply(state: &SharedState, g: &GameEntry, row: &GithubUpdate) {
     if row.url.is_empty() {
-        return log(state, "WARN", format!("The new release of {} has several files and Gantry cannot tell which one replaces yours: pick it in the GitHub tab.", row.name));
+        return log(state, "WARN", format!("The new release of {} has several files and ModForge cannot tell which one replaces yours: pick it in the GitHub tab.", row.name));
     }
     github_install_for(state, g, &row.repo, &row.url, row.new_ref.clone());
     refresh_mods_shared(state);
@@ -11295,8 +11295,8 @@ fn announce_crash_reports(state: &SharedState, dir: &Path) {
             st.config.crash_seen_ms = now_ms();
             st.save_config();
         }
-        log(state, "WARN", "Gantry stopped unexpectedly. A report was saved on this computer; nothing was sent.");
-        add_note(state, "selfcrash", "Gantry stopped unexpectedly last time. A report was saved on this computer and nothing was sent. Open Help to read it.", "");
+        log(state, "WARN", "ModForge stopped unexpectedly. A report was saved on this computer; nothing was sent.");
+        add_note(state, "selfcrash", "ModForge stopped unexpectedly last time. A report was saved on this computer and nothing was sent. Open Help to read it.", "");
     }
 }
 
@@ -11317,7 +11317,7 @@ fn fatal(msg: &str) -> ! {
         let _ = std::io::Write::write_all(&mut f, line.as_bytes());
     }
     let lang = configured_language();
-    platform::fatal_notice(&i18n::tr(&lang, "Gantry failed to start"), msg);
+    platform::fatal_notice(&i18n::tr(&lang, "ModForge failed to start"), msg);
     std::process::exit(1);
 }
 
@@ -11418,7 +11418,7 @@ fn bind_or_reuse(port: u16, build: &str, profile_dir: &Path, nxm: Option<&str>) 
                 // a Nexus link: the running window shows the confirmation, no second window
                 Some(url) if forward_nxm(port, url) => {
                     let lang = configured_language();
-                    platform::notify(&i18n::tr(&lang, "Mod download waiting"), &i18n::tr(&lang, "Open Gantry to confirm the Nexus download."));
+                    platform::notify(&i18n::tr(&lang, "Mod download waiting"), &i18n::tr(&lang, "Open ModForge to confirm the Nexus download."));
                 }
                 _ => launch_native_app_window(&format!("http://127.0.0.1:{}", port), profile_dir),
             }
@@ -11497,7 +11497,7 @@ fn pick_game(games: &[(String, String)], q: &str) -> Result<usize, String> {
     let hits: Vec<usize> = games.iter().enumerate().filter(|(_, (_, n))| !lower.is_empty() && n.to_lowercase().contains(&lower)).map(|(i, _)| i).collect();
     match hits.as_slice() {
         [one] => Ok(*one),
-        [] => Err(format!("No game called '{q}' in Gantry.")),
+        [] => Err(format!("No game called '{q}' in ModForge.")),
         many => Err(format!("'{q}' fits several games: {}. Use the id or the full name.", many.iter().take(6).map(|&i| format!("{} ({})", games[i].1, games[i].0)).collect::<Vec<_>>().join(", "))),
     }
 }
@@ -11505,16 +11505,16 @@ fn pick_game(games: &[(String, String)], q: &str) -> Result<usize, String> {
 /// Ask the running Gantry on `port` to start a game. `mode` is "mods", "vanilla" or "profile:<name>".
 fn play_via_running(port: u16, query: &str, mode: &str) -> Result<String, String> {
     let host = format!("127.0.0.1:{port}");
-    let (_, page) = local_http(port, &format!("GET / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")).ok_or("Gantry does not answer.")?;
-    let token = page.split("RIG_TOKEN = \"").nth(1).and_then(|r| r.split('"').next()).ok_or("That is not Gantry.")?.to_string();
+    let (_, page) = local_http(port, &format!("GET / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n")).ok_or("ModForge does not answer.")?;
+    let token = page.split("RIG_TOKEN = \"").nth(1).and_then(|r| r.split('"').next()).ok_or("That is not ModForge.")?.to_string();
     let ask = |method: &str, path: &str, body: Option<Value>| -> Result<Value, String> {
         let body = body.map(|b| b.to_string()).unwrap_or_default();
         let req = format!("{method} {path} HTTP/1.1\r\nHost: {host}\r\nX-Rig-Token: {token}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
-        let (code, text) = local_http(port, &req).ok_or("Gantry stopped answering.")?;
+        let (code, text) = local_http(port, &req).ok_or("ModForge stopped answering.")?;
         if code != 200 {
-            return Err(format!("Gantry refused the request ({code})."));
+            return Err(format!("ModForge refused the request ({code})."));
         }
-        serde_json::from_str(&text).map_err(|_| "Gantry sent an unreadable answer.".to_string())
+        serde_json::from_str(&text).map_err(|_| "ModForge sent an unreadable answer.".to_string())
     };
     let state = ask("GET", "/api/state", None)?;
     let games: Vec<(String, String)> = state["games"].as_array().into_iter().flatten().map(|g| (g["appid"].as_str().unwrap_or("").to_string(), g["name"].as_str().unwrap_or("").to_string())).collect();
@@ -12002,7 +12002,7 @@ mod tests {
         assert_eq!(code, 200);
         assert!(body.contains(&h.token), "token injected");
         assert!(!body.contains("__RIG_TOKEN__"));
-        assert!(body.contains("Gantry"));
+        assert!(body.contains("ModForge"));
         assert_eq!(http(&h, "GET", "/nope", &[], b"").0, 404);
     }
 
@@ -12709,7 +12709,7 @@ mod tests {
         let of = |id: &str| run.steps.iter().find(|s| s.id == id).unwrap().clone();
         assert_eq!(of("core:RED4ext").status, "done");
         assert_eq!(of("core:TweakXL").status, "failed");
-        assert!(of("core:Codeware").detail.contains("no file Gantry recognises"), "{:?}", of("core:Codeware"));
+        assert!(of("core:Codeware").detail.contains("no file ModForge recognises"), "{:?}", of("core:Codeware"));
         assert!(last_log(&h).contains("open item"), "{}", last_log(&h));
     }
 
@@ -16798,7 +16798,7 @@ mod tests {
         serve(Some(sum_of(b"NEW PROGRAM")));
         h.state.write().unwrap().github_allow = None;
         api(&h, "/api/self_update", json!({}));
-        wait_until("not from its releases", || last_log(&h).contains("not from Gantry's own releases"));
+        wait_until("not from its releases", || last_log(&h).contains("not from ModForge's own releases"));
         assert_eq!(fs::read_to_string(&target).unwrap(), "OLD PROGRAM");
         assert_eq!(ready(), Value::Null);
 
@@ -16809,11 +16809,11 @@ mod tests {
         wait_until("in place", || ready() == "v99.0.0");
         assert_eq!(fs::read_to_string(&target).unwrap(), "NEW PROGRAM");
         assert!(!h._dir.join("Gantry.AppImage.old").exists());
-        assert!(last_log(&h).contains("Close Gantry and open it again"), "{}", last_log(&h));
+        assert!(last_log(&h).contains("Close ModForge and open it again"), "{}", last_log(&h));
         // a tag with odd characters is not looked up at all
         h.state.write().unwrap().new_version = Some("v1/../../x".into());
         api(&h, "/api/self_update", json!({}));
-        wait_until("no newer", || last_log(&h).contains("no newer Gantry"));
+        wait_until("no newer", || last_log(&h).contains("no newer ModForge"));
     }
 
     #[test]
@@ -16861,7 +16861,7 @@ mod tests {
         h.state.write().unwrap().steam_env.running = Some(false);
         fs::write(&file, b"not a shortcuts file").unwrap();
         api(&h, "/api/steam_shortcut", json!({}));
-        wait_until("refused", || last_log(&h).contains("a form Gantry does not know"));
+        wait_until("refused", || last_log(&h).contains("a form ModForge does not know"));
         assert_eq!(fs::read(&file).unwrap(), b"not a shortcuts file");
         // an empty folder gets the entry, with the program and controller mode
         fs::remove_file(&file).unwrap();
@@ -17841,7 +17841,7 @@ mod tests {
         wait_until("the settings coming back", || api(&h, "/api/state", json!({}))["settings"]["theme"] != "midnight");
         // a name that is not one of ours is refused
         api(&h, "/api/auto_backup_restore", json!({ "name": "../../config/protonrig/rig_config.json" }));
-        wait_until("the refusal", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("not a backup of Gantry")));
+        wait_until("the refusal", || h.state.read().unwrap().logs.iter().any(|l| l.message.contains("not a backup of ModForge")));
 
         api(&h, "/api/settings", json!({ "auto_backup": false }));
         assert_eq!(api(&h, "/api/state", json!({}))["settings"]["auto_backup"], false);

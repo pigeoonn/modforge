@@ -2467,7 +2467,7 @@ impl Library {
     pub fn apply_spec(&self, spec: &ProfileSpec) -> Result<Vec<SpecMod>, String> {
         let _g = lock();
         if spec.gantry_profile != 1 {
-            return Err("This file is not a Gantry setup.".into());
+            return Err("This file is not a ModForge setup.".into());
         }
         let mut lf = self.load();
         let mut missing = Vec::new();
@@ -2599,7 +2599,7 @@ impl Library {
         if !force {
             if let Some(ac) = anti_cheat(&self.game_dir) {
                 return Err(format!(
-                    "This game uses {ac}. Modded files can get your account banned, so Gantry will not deploy unless you confirm."
+                    "This game uses {ac}. Modded files can get your account banned, so ModForge will not deploy unless you confirm."
                 ));
             }
         }

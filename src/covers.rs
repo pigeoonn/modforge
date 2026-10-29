@@ -50,7 +50,7 @@ pub fn lookup(name: &str, base: &str, allow_http: bool) -> Result<Option<u64>, S
     let mut last = None;
     for term in [name.to_string(), simplified(name)].iter().filter(|t| t.len() >= 3) {
         let out = Command::new("curl")
-            .args(["-sSL", "--max-time", "20", "-A", "Gantry", "--get", "--data-urlencode"])
+            .args(["-sSL", "--max-time", "20", "-A", "ModForge", "--get", "--data-urlencode"])
             .arg(format!("term={term}"))
             .args(["--data-urlencode", "l=english", "--data-urlencode", "cc=US"])
             .arg(base)

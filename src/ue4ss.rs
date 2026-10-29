@@ -59,7 +59,7 @@ pub fn pick_asset(release: &Value, allowed_prefix: &str) -> Option<Asset> {
 
 fn fetch_latest(src: &Source) -> Result<Asset, String> {
     let out = Command::new("curl")
-        .args(["-sSL", "--max-time", "30", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Gantry"])
+        .args(["-sSL", "--max-time", "30", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: ModForge"])
         .arg(&src.api_url)
         .stdin(Stdio::null())
         .output()

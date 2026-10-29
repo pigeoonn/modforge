@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 pub const DEFAULT_BASE: &str = "https://api.nexusmods.com";
-const APP_NAME: &str = "Gantry";
+const APP_NAME: &str = "ModForge";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct NxmLink {

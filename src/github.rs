@@ -154,7 +154,7 @@ fn explain(v: &Value) -> Option<String> {
 
 fn get(url: &str) -> Result<Value, String> {
     let out = Command::new("curl")
-        .args(["-sSL", "--max-time", "30", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: Gantry"])
+        .args(["-sSL", "--max-time", "30", "-H", "Accept: application/vnd.github+json", "-H", "User-Agent: ModForge"])
         .arg(url)
         .stdin(Stdio::null())
         .output()

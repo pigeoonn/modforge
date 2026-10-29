@@ -87,7 +87,7 @@ pub fn iso_to_ms(d: &str) -> u64 {
 /// The Nexus mod JSON as a page. Adult pages and withdrawn mods are not shown.
 pub fn nexus_page(v: &Value, game: &str, mod_id: u64) -> Result<Page, String> {
     if v.get("contains_adult_content").and_then(Value::as_bool).unwrap_or(false) {
-        return Err("This mod's page is marked for adults, so Gantry does not show it.".into());
+        return Err("This mod's page is marked for adults, so ModForge does not show it.".into());
     }
     if v.get("available").and_then(Value::as_bool) == Some(false) {
         return Err("The author has taken this mod down.".into());

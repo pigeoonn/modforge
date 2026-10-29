@@ -9,7 +9,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The name the entry has in Steam's library.
-pub const NAME: &str = "Gantry";
+pub const NAME: &str = "ModForge";
 
 /// Where `shortcuts.vdf` is for the account whose `localconfig.vdf` is `localconfig` (the same `config` folder).
 pub fn path_beside(localconfig: &Path) -> Option<PathBuf> {
@@ -294,7 +294,7 @@ pub fn add_shortcut(
     } else {
         file.to_vec()
     };
-    let list = entries(&clean).ok_or("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.")?;
+    let list = entries(&clean).ok_or("Steam's shortcuts file has a form ModForge does not know, so it was left as it is.")?;
     let next = list.iter().map(|(i, _, _)| i + 1).max().unwrap_or(0);
     let appid = shortcut_appid(exe, name);
     let mut out = clean;
@@ -336,9 +336,9 @@ pub fn sync_grid_artwork(
 
 /// `file` with a Gantry entry added. An empty or missing file becomes a file with just that entry.
 pub fn add_gantry(file: &[u8], exe: &str, start_dir: &str, args: &str) -> Result<Vec<u8>, String> {
-    let list = entries(file).ok_or("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.")?;
+    let list = entries(file).ok_or("Steam's shortcuts file has a form ModForge does not know, so it was left as it is.")?;
     if list.iter().any(|(_, name, e)| name == NAME || e.trim_matches('"') == exe) {
-        return Err("Gantry is already in Steam's library.".into());
+        return Err("ModForge is already in Steam's library.".into());
     }
     let next = list.iter().map(|(i, _, _)| i + 1).max().unwrap_or(0);
     let mut out = if file.is_empty() { b"\0shortcuts\0\x08\x08".to_vec() } else { file.to_vec() };
@@ -357,7 +357,7 @@ mod tests {
         let f = add_gantry(b"", "/opt/Gantry.AppImage", "/opt", "--deck").unwrap();
         assert!(f.starts_with(b"\0shortcuts\0\0") && f.ends_with(&[8, 8]));
         let e = entries(&f).unwrap();
-        assert_eq!(e, vec![(0, "Gantry".to_string(), "\"/opt/Gantry.AppImage\"".to_string())]);
+        assert_eq!(e, vec![(0, NAME.to_string(), "\"/opt/Gantry.AppImage\"".to_string())]);
         assert_eq!(has_gantry(&f, "/opt/Gantry.AppImage"), Some(true));
         assert_eq!(has_gantry(&f, "/somewhere/else"), Some(true), "the name alone is enough");
     }
@@ -379,7 +379,7 @@ mod tests {
         let f = add_gantry(&other, "/opt/rig", "/opt", "").unwrap();
         assert!(f.starts_with(&other[..other.len() - 2]), "everything before the new entry is untouched");
         let names: Vec<(u64, String)> = entries(&f).unwrap().into_iter().map(|(i, n, _)| (i, n)).collect();
-        assert_eq!(names, vec![(0, "Game A".into()), (4, "Game B".into()), (5, "Gantry".into())]);
+        assert_eq!(names, vec![(0, "Game A".into()), (4, "Game B".into()), (5, NAME.into())]);
         // adding twice is refused
         assert!(add_gantry(&f, "/opt/rig", "/opt", "").unwrap_err().contains("already"));
     }
