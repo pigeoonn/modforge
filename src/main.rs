@@ -2843,14 +2843,14 @@ fn reapply_pending(state: &SharedState, lib: &deploy::Library) {
     }
 }
 
-/// Save the selected game's mods as a modpack: a zip with the list (`pack.json`) and the files of the mods
-/// that cannot be fetched again. Mods from Nexus Mods and Thunderstore are only linked, never copied.
-fn export_pack_file(state: &SharedState, g: &GameEntry, name: &str, path: &Path) -> Result<String, String> {
+/// Save the selected game's mods as a modpack: a zip with the list (`pack.json`) and the files of the mods.
+/// When `full_bundle` is true, all enabled mods are packed with their full files for offline/friend sharing.
+fn export_pack_file(state: &SharedState, g: &GameEntry, name: &str, path: &Path, full_bundle: bool) -> Result<String, String> {
     let lib = library_of(g).ok_or_else(|| format!("{} is not installed.", g.name))?;
     let tmp = read_state(state).cache_root().join("pack").join(fsutil::unique_token());
     fs::create_dir_all(&tmp).map_err(|e| e.to_string())?;
     let done = (|| {
-        let (spec, copied) = lib.export_pack(&g.name, name, "", &tmp)?;
+        let (spec, copied) = lib.export_pack_opt(&g.name, name, "", &tmp, full_bundle)?;
         fs::write(tmp.join("pack.json"), serde_json::to_string_pretty(&spec).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
         let tool = ["bsdtar", "tar"].iter().find(|t| fsutil::find_in_path(t).is_some()).ok_or("Making a modpack needs bsdtar (or tar).")?;
         let _ = fs::remove_file(path);
@@ -5666,6 +5666,16 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 log(state, "OK", format!("Purged {} stale DXVK/VKD3D shader cache file(s).", count));
             }
         }
+        "/api/clean_prefix_caches" => {
+            if let Some(g) = selected_game(state) {
+                let (count, freed) = RepairEngine::clean_prefix_caches(&g);
+                if count > 0 {
+                    log(state, "OK", format!("Cleaned {} prefix cache and dump file(s) ({}) freed.", count, fsutil::size_text(freed)));
+                } else {
+                    log(state, "INFO", "Prefix is already clean; no stale pipeline caches or crash dumps found.");
+                }
+            }
+        }
         "/api/kill_wine" | "/api/stop" => {
             let (game, pid, proton, running) = {
                 let st = read_state(state);
@@ -6502,11 +6512,20 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             let state_bg = Arc::clone(state);
             let lang = read_state(state).config.language.clone();
             let name = body_str(body, "name");
+            let full = body.get("full").and_then(Value::as_bool).unwrap_or(false);
+            let target_path = body_str(body, "path");
             thread::spawn(move || {
                 let Some(g) = selected_game(&state_bg).filter(|g| g.is_installed) else { return };
                 let label = if name.is_empty() { format!("{} modpack", g.name) } else { name.clone() };
-                let Some(path) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Save the modpack")).add_filter(i18n::tr(&lang, "Gantry modpack"), &["gantrypack"]).set_file_name(format!("{label}.gantrypack")).save_file() else { return };
-                match export_pack_file(&state_bg, &g, &label, &path) {
+                let path = if !target_path.is_empty() {
+                    PathBuf::from(target_path)
+                } else {
+                    let ext = if full { "zip" } else { "gantrypack" };
+                    let filter_desc = if full { "Modpack Archive (.zip)" } else { "Gantry modpack" };
+                    let Some(p) = rfd::FileDialog::new().set_title(i18n::tr(&lang, "Save the modpack")).add_filter(filter_desc, &[ext]).set_file_name(format!("{label}.{ext}")).save_file() else { return };
+                    p
+                };
+                match export_pack_file(&state_bg, &g, &label, &path, full) {
                     Ok(m) => log(&state_bg, "OK", m),
                     Err(e) => log(&state_bg, "ERR", e),
                 }
@@ -7040,6 +7059,10 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
             let state_bg = Arc::clone(state);
             thread::spawn(move || play_without_mods(&state_bg));
         }
+        "/api/play_safe_mode" => {
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || play_in_safe_mode(&state_bg));
+        }
         "/api/play_profile" => {
             let name = body_str(body, "name");
             let state_bg = Arc::clone(state);
@@ -7097,6 +7120,24 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
                 let places = save_places(state, &g);
                 if let Some(p) = folder_target(&g, &body_str(body, "which"), &cache, &places) {
                     xdg_open(p);
+                }
+            }
+        }
+        "/api/open_mod_folder" => {
+            let id = body_str(body, "id");
+            if let Some(g) = selected_game(state) {
+                if let Some(lib) = library_of(&g) {
+                    let files_dir = lib.mod_files_dir(&id);
+                    let target_dir = if files_dir.exists() {
+                        files_dir
+                    } else {
+                        lib.root().join("mods").join(&id)
+                    };
+                    if target_dir.exists() {
+                        xdg_open(&target_dir);
+                    } else {
+                        log(state, "WARN", "Mod staging folder does not exist.");
+                    }
                 }
             }
         }
@@ -10891,6 +10932,49 @@ fn watch_vanilla_session(state: &SharedState, g: &GameEntry) {
         }
     }
     end_vanilla(state, &g.appid);
+}
+
+/// Start the selected game with only core loaders and framework mods enabled; content mods are restored when the game exits.
+fn play_in_safe_mode(state: &SharedState) {
+    let Some(g) = selected_game(state).filter(|g| g.is_installed) else {
+        return log(state, "WARN", "Select an installed game first.");
+    };
+    if read_state(state).is_running.load(Ordering::SeqCst) {
+        return log(state, "WARN", "A game is already running.");
+    }
+    if let Some(lib) = library_of(&g) {
+        match lib.stage_safe_mode() {
+            Ok(count) => {
+                log(state, "INFO", format!("Safe Mode: {} content mod(s) temporarily disabled; core loaders remain active.", count));
+                let _ = library_apply(state, &lib, false);
+                refresh_mods_shared(state);
+            }
+            Err(e) => return log(state, "ERR", e),
+        }
+    }
+    play_game_inner(state, false);
+    let st = Arc::clone(state);
+    thread::spawn(move || watch_safe_mode_session(&st, &g));
+}
+
+fn watch_safe_mode_session(state: &SharedState, g: &GameEntry) {
+    let started_by = Instant::now();
+    let mut seen = false;
+    loop {
+        thread::sleep(if cfg!(test) { Duration::from_millis(50) } else { Duration::from_secs(2) });
+        let running = procs::is_game_running(g);
+        if running {
+            seen = true;
+        } else if seen || started_by.elapsed() > Duration::from_secs(if cfg!(test) { 4 } else { 240 }) {
+            break;
+        }
+    }
+    if let Some(lib) = library_of(g) {
+        let _ = lib.restore_safe_mode();
+        let _ = library_apply(state, &lib, false);
+        log(state, "OK", format!("{} is closed; all mods restored from Safe Mode.", g.name));
+        refresh_mods_shared(state);
+    }
 }
 
 /// After a restart: a vanilla session that was left open ends when its game is not running.
@@ -14717,7 +14801,7 @@ mod tests {
         let share: Value = serde_json::from_str(&b).unwrap();
         assert_eq!((share["mods"].as_u64(), share["left_out"].as_u64()), (Some(1), Some(1)), "{share}");
         let pack = h._dir.join("my.gantrypack");
-        export_pack_file(&h.state, &from, "Cool setup", &pack).unwrap();
+        export_pack_file(&h.state, &from, "Cool setup", &pack, false).unwrap();
 
         add_plain_game(&h);
         let preview = || api(&h, "/api/state", json!({}))["import_preview"].clone();
@@ -14778,7 +14862,7 @@ mod tests {
         src.set_enabled(&src.mods()[1].id, false).unwrap();
 
         let pack = h._dir.join("my.gantrypack");
-        let msg = export_pack_file(&h.state, &from, "Cool setup", &pack).unwrap();
+        let msg = export_pack_file(&h.state, &from, "Cool setup", &pack, false).unwrap();
         assert!(msg.contains("1 with their files"), "{msg}");
         // inside: the list, the files of the hand-added mod only
         let listing = String::from_utf8_lossy(&Command::new(tar_tool()).arg("-tf").arg(&pack).output().unwrap().stdout).to_string();
@@ -14807,6 +14891,29 @@ mod tests {
         // not a modpack at all
         fs::write(h._dir.join("junk.gantrypack"), "PK\x03\x04nonsense").unwrap();
         assert!(read_pack_file(&h.state, &h._dir.join("junk.gantrypack")).is_err());
+    }
+
+    #[test]
+    fn export_modpack_full_bundle_includes_all_files_for_offline_sharing() {
+        let h = harness("fullpack");
+        let from = h.game.clone();
+        let src = library_of(&from).unwrap();
+        let stage = |n: &str, f: &str| {
+            let d = h._dir.join(&format!("fullp-{n}"));
+            fs::create_dir_all(d.join("Data")).unwrap();
+            fs::write(d.join("Data").join(f), n).unwrap();
+            d
+        };
+        src.add_with(&stage("hand", "hand.esp"), "Hand Mod", "hand.zip", None, "1.0").unwrap();
+        let nx = nexus::NexusRef { game: "coolgame".into(), mod_id: 101, file_id: 5 };
+        src.add_with(&stage("nx", "nx.esp"), "Nexus Mod", "nx.zip", Some(nx), "2.0").unwrap();
+
+        let pack = h._dir.join("standalone.zip");
+        let msg = export_pack_file(&h.state, &from, "Full Pack", &pack, true).unwrap();
+        assert!(msg.contains("2 with their files"), "{msg}");
+
+        let listing = String::from_utf8_lossy(&Command::new(tar_tool()).arg("-tf").arg(&pack).output().unwrap().stdout).to_string();
+        assert!(listing.contains("pack.json") && listing.contains("hand.esp") && listing.contains("nx.esp"), "{listing}");
     }
 
     #[test]
@@ -16374,6 +16481,42 @@ mod tests {
         }
         api(&h, "/api/open_folder", json!({ "which": "saves" }));
         api(&h, "/api/open_folder", json!({}));
+    }
+
+    #[test]
+    fn open_mod_folder_opens_staged_directory() {
+        let h = harness("openmodfolder");
+        let g = selected_game(&h.state).unwrap();
+        let lib = library_of(&g).unwrap();
+        let d = h._dir.join("test-staged");
+        fs::create_dir_all(d.join("Data")).unwrap();
+        fs::write(d.join("Data/test.esp"), "test").unwrap();
+        let m = lib.add_from_dir(&d, "Staged Test Mod", "staged.zip").unwrap();
+
+        assert!(lib.mod_files_dir(&m.id).exists());
+
+        let res = api(&h, "/api/open_mod_folder", json!({ "id": m.id }));
+        assert!(res["games"].is_array());
+
+        let res_bad = api(&h, "/api/open_mod_folder", json!({ "id": "unknown-id" }));
+        assert!(res_bad["games"].is_array());
+    }
+
+    #[test]
+    fn clean_prefix_caches_endpoint_cleans_caches() {
+        let h = harness("pfxcleanend");
+        let g = selected_game(&h.state).unwrap();
+        let cache_file = PathBuf::from(&g.compatdata).join("dxvk.cache");
+        fs::create_dir_all(&g.compatdata).unwrap();
+        fs::write(&cache_file, b"cache").unwrap();
+        assert!(cache_file.exists());
+
+        let res = api(&h, "/api/clean_prefix_caches", json!({}));
+        assert!(res["games"].is_array());
+        assert!(!cache_file.exists());
+
+        let res2 = api(&h, "/api/clean_prefix_caches", json!({}));
+        assert!(res2["games"].is_array());
     }
 
     #[test]

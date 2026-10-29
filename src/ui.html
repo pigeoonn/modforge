@@ -1443,8 +1443,15 @@
             <input type="checkbox" id="mlSaves" onchange="toggleSeparateSaves(this.checked)">
             <span id="mlSavesText" data-dyn></span>
           </label>
-          <div id="mlSavesCloud" data-dyn style="display:none; font-size:12px; color:var(--text-muted); z-index:2;"></div>
-          <input type="text" id="mlFilter" class="mod-filter-input" style="width:100%; z-index:2;" placeholder="Filter mods…" oninput="renderModLib()" autocomplete="off">
+          <div style="display:flex; gap:8px; align-items:center; z-index:2; width:100%;">
+            <input type="text" id="mlFilter" class="mod-filter-input" style="flex:1; margin:0;" placeholder="Filter mods…" oninput="renderModLib()" autocomplete="off">
+            <select id="mlSort" class="proton-select" style="padding:4px 8px; font-size:11px;" onchange="renderModLib()" title="Sort library view">
+              <option value="prio">↕ Load Order</option>
+              <option value="size">💾 Size (Largest)</option>
+              <option value="name">🔤 Name (A-Z)</option>
+              <option value="date">📅 Date (Newest)</option>
+            </select>
+          </div>
           <div class="ml-chips" id="mlChips" data-dyn></div>
           <div class="ml-bulk" id="mlBulk" data-dyn style="display:none"></div>
           <div class="ml-list" id="mlList" data-dyn></div>
@@ -1489,6 +1496,7 @@
             <button class="btn tool" onclick="openPack()">🧩 Support entry</button>
             <button class="btn tool" id="btnPlugins" style="display:none" onclick="openPlugins()">🔌 Plugins</button>
             <button class="btn tool" onclick="ipcSend('/api/clear_shaders')">🧹 Purge Shaders</button>
+            <button class="btn tool linux-only" onclick="ipcSend('/api/clean_prefix_caches')">🧹 Clean Prefix Caches</button>
           </div>
         </div>
         <div class="tool-group">
@@ -5872,6 +5880,7 @@
     closeCtx();
     const g = appState.games[appState.selected_idx];
     const items = [
+      [t('📦 Export Modpack (.zip)'), () => exportModpackZip()],
       [t('📤 Share as modpack'), () => shareModpack()],
       [t('📥 Import a modpack'), () => ipcSend('/api/lib_import', {})],
       [t('🔗 Copy share code'), () => copyShareCode()],
@@ -5904,8 +5913,10 @@
     closeCtx();
     const lib = appState.library || {};
     const g = appState.games[appState.selected_idx];
-    const items = [[t('○ Play without mods'), () => ipcSend('/api/play_vanilla', {})]]
-      .concat((lib.profiles || []).map(p => [t('Play with “{}”', p), () => ipcSend('/api/play_profile', { name: p })]));
+    const items = [
+      [t('○ Play without mods'), () => ipcSend('/api/play_vanilla', {})],
+      [t('🛡 Play in Safe Mode (Loaders Only)'), () => ipcSend('/api/play_safe_mode', {})],
+    ].concat((lib.profiles || []).map(p => [t('Play with “{}”', p), () => ipcSend('/api/play_profile', { name: p })]));
     if (g && appState.os !== 'macos') items.push([t('🖥 Create a shortcut for this game'), () => ipcSend('/api/game_shortcut', { appid: g.appid, desktop: true })]);
     if (g && appState.os === 'linux') items.push([t('🎮 Add to Steam (Steam Deck)'), () => addGameToSteamDeck(g.appid)]);
     const m = document.createElement('div');
@@ -6376,6 +6387,7 @@
     }
     if (d.store) actions.unshift(d.store.already ? `<span class="ml-pill good">${t('In your library')}</span>` : `<button class="btn btn-play" onclick="mpInstallFromStore()">${d.store.source === 'nexus' && !d.store.premium ? t('Get it') : t('Install')}</button>`);
     if (d.page_url) actions.push(`<button class="btn" onclick='openWeb(${JS(d.page_url)})'>↗ ${t('Open the page')}</button>`);
+    if (d.installed) actions.push(`<button class="btn" onclick='ipcSend("/api/open_mod_folder", { id: ${JS(d.installed.id)} })' title="${escapeHtml(t('Open staged mod folder in file manager'))}">📁 ${t('Open Folder')}</button>`);
     if (d.installed && d.source !== 'local') {
       actions.push(`<select class="proton-select" style="display:inline-block" title="${escapeHtml(t('What should happen when a newer version appears?'))}" onchange='mpRule(this.value)'>
         <option value="" ${!d.rule ? 'selected' : ''}>${t('Tell me about updates')}</option>
@@ -6433,7 +6445,8 @@
         + `<div style="color:var(--text-muted); font-size:12px; margin-top:6px">${t('Switching this mod off or removing it stops these from working.')}</div>`;
     } else if (mpTab === 'files' && d.installed) {
       const i = d.installed;
-      html += `<div class="mp-kv"><span>${t('Source')}</span><span>${escapeHtml(i.source || t('manual'))}</span>
+      html += `<div style="margin-bottom:10px"><button class="btn" onclick='ipcSend("/api/open_mod_folder", { id: ${JS(i.id)} })'>📁 ${t('Open Staged Folder')}</button></div>
+        <div class="mp-kv"><span>${t('Source')}</span><span>${escapeHtml(i.source || t('manual'))}</span>
         <span>${t('Size')}</span><span>${fmtSize(i.size)}</span>
         <span>${t('Goes into')}</span><span>${escapeHtml(i.target || t('the game folder'))}</span>
         ${i.added_ms ? `<span>${t('Added')}</span><span>${escapeHtml(ago(i.added_ms))}</span>` : ''}</div>
@@ -6485,6 +6498,13 @@
   }
 
   // ---- modpacks: share the setup, and fetch what an imported one still needs ----
+  function exportModpackZip() {
+    const g = appState.games[appState.selected_idx];
+    const name = prompt(t('Name of the modpack archive:'), g ? t('{} modpack', g.name) : '');
+    if (name === null) return;
+    ipcSend('/api/pack_export', { name: name.trim(), full: true });
+    showToast(t('Exporting full modpack archive…'));
+  }
   function shareModpack() {
     const g = appState.games[appState.selected_idx];
     const name = prompt(t('Name of the modpack:'), g ? t('{} modpack', g.name) : '');
@@ -6749,8 +6769,16 @@
     // a group shown by itself can be switched on or off as a whole
     const groupView = mlChip === 'core' || mlChip.startsWith('g:');
     const groupBtns = groupView ? `<button class="ml-chip" onclick="mlGroupSet(true)">${t('Turn the group on')}</button><button class="ml-chip" onclick="mlGroupSet(false)">${t('Turn the group off')}</button>` : '';
-    document.getElementById('mlChips').innerHTML = lib.mods.length > 1 ? chipHtml + groupBtns + `<button class="ml-chip" onclick="mlSelectAll()" title="${escapeHtml(t('Select every mod shown'))}">☑ ${t('Select all')}</button>` : '';
     const shown = lib.mods.map((m, i) => ({ m, i })).filter(({ m }) => chipTests[mlChip](m) && (!fq || [m.name, m.note, m.source, m.version, m.group].join(' ').toLowerCase().includes(fq)));
+    const sortEl = document.getElementById('mlSort');
+    const sortMode = sortEl ? sortEl.value : 'prio';
+    if (sortMode === 'size') {
+      shown.sort((a, b) => (b.m.size || 0) - (a.m.size || 0));
+    } else if (sortMode === 'name') {
+      shown.sort((a, b) => a.m.name.localeCompare(b.m.name));
+    } else if (sortMode === 'date') {
+      shown.sort((a, b) => (b.m.added_ms || 0) - (a.m.added_ms || 0));
+    }
     mlShownIds = shown.map(x => x.m.id);
     for (const id of [...mlSel]) if (!lib.mods.some(m => m.id === id)) mlSel.delete(id);
     const bulk = document.getElementById('mlBulk');
@@ -6789,6 +6817,7 @@
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Load later (wins conflicts)')}" onclick='ipcSend("/api/lib_move", { id: ${JS(m.id)}, delta: 1 })'>▼</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Move to bottom of load order'))}" onclick='ipcSend("/api/lib_move_to", { id: ${JS(m.id)}, to: 999999 })'>⤋</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('About this mod: its page, what changed, what it needs'))}" onclick='openModPage(${JS(m.id)})'>ℹ</button>
+        <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Open staged mod folder in file manager'))}" onclick='ipcSend("/api/open_mod_folder", { id: ${JS(m.id)} })'>📁</button>
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Add a note to this mod'))}" onclick='modLibNote(${JS(m.id)}, ${JS(m.name)}, ${JS(m.note || '')})'>✎</button>
         ${m.notes > 0 ? `<button class="btn" style="padding:2px 7px; font-size:11px;" title="${escapeHtml(t('Read the instructions that came with this mod'))}" onclick='openNotes(${JS(m.id)}, ${JS(m.name)})'>📄</button>` : ''}
         <button class="btn" style="padding:2px 7px; font-size:11px;" title="${t('Install into another folder of the game')}" onclick='modLibTarget(${JS(m.id)}, ${JS(m.target)})'>📂</button>

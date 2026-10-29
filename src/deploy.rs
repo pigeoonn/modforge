@@ -687,7 +687,7 @@ impl Library {
         Ok(m.programs.iter().filter_map(|f| Some((f.clone(), crate::hashing::sha256_file(&self.mod_files_dir(id).join(f)).ok()?))).collect())
     }
 
-    fn mod_files_dir(&self, id: &str) -> PathBuf {
+    pub fn mod_files_dir(&self, id: &str) -> PathBuf {
         self.root.join("mods").join(id).join("files")
     }
 
@@ -2063,6 +2063,49 @@ impl Library {
         Ok(snap.label)
     }
 
+    /// Disables all content mods, keeping only core loaders and framework mods enabled.
+    /// Returns the number of content mods disabled.
+    pub fn stage_safe_mode(&self) -> Result<usize, String> {
+        let _g = lock();
+        let mut lf = self.load();
+        lf.snapshot("Before Safe Mode launch".into());
+        let mut disabled = 0;
+        let is_loader = |m: &LibMod| -> bool {
+            let n = m.name.to_lowercase();
+            let is_hook = m.files.iter().any(|f| {
+                let l = f.to_lowercase();
+                l.ends_with(".dll") || l.ends_with(".asi") || l.ends_with(".so")
+                    || crate::deploy::PROXY_DLLS.iter().any(|p| l.contains(p))
+            });
+            is_hook || n.contains("ue4ss") || n.contains("bepinex") || n.contains("melonloader")
+                || n.contains("loader") || n.contains("framework") || n.contains("extender")
+                || n.contains("red4ext") || n.contains("cet") || n.contains("gdweave")
+        };
+        for m in &mut lf.mods {
+            if m.enabled && !is_loader(m) {
+                m.enabled = false;
+                disabled += 1;
+            }
+        }
+        if disabled > 0 {
+            lf.dirty = true;
+            self.save(&lf)?;
+        }
+        Ok(disabled)
+    }
+
+    /// Restore the mods state that was snapshotted before Safe Mode launch.
+    pub fn restore_safe_mode(&self) -> Result<(), String> {
+        let _g = lock();
+        let mut lf = self.load();
+        let n = lf.history.len();
+        if let Some(snap) = n.checked_sub(1).and_then(|i| lf.history.get(i).cloned()) {
+            lf.apply(&snap);
+            self.save(&lf)?;
+        }
+        Ok(())
+    }
+
     /// Remove a mod: purge first (so none of its files stay in the game), then move its files
     /// to the library trash. The caller redeploys afterwards.
     pub fn remove(&self, id: &str) -> Result<(), String> {
@@ -2378,6 +2421,11 @@ impl Library {
     /// The setup as a modpack: `export_spec`, with the files of every mod that cannot be fetched again (one that
     /// came from neither Nexus Mods nor Thunderstore) copied under `dest/mods/<n>`. Returns how many were copied.
     pub fn export_pack(&self, game: &str, name: &str, note: &str, dest: &Path) -> Result<(ProfileSpec, usize), String> {
+        self.export_pack_opt(game, name, note, dest, false)
+    }
+
+    /// Export setup as a modpack, optionally copying files of all mods when `full_bundle` is true.
+    pub fn export_pack_opt(&self, game: &str, name: &str, note: &str, dest: &Path, full_bundle: bool) -> Result<(ProfileSpec, usize), String> {
         let _g = lock();
         let lf = self.load();
         let mut spec = self.export_spec(game);
@@ -2385,7 +2433,7 @@ impl Library {
         spec.note = note.chars().take(400).collect();
         let mut copied = 0;
         for (i, m) in lf.mods.iter().enumerate() {
-            if spec.mods[i].fetchable() {
+            if !full_bundle && spec.mods[i].fetchable() {
                 continue;
             }
             let from = self.mod_files_dir(&m.id);
@@ -3039,6 +3087,26 @@ mod tests {
         assert_eq!(lib.matching_profile().as_deref(), Some("Only B"), "a removed mod does not count against a profile");
         lib.delete_profile("Only B").unwrap();
         assert_eq!(lib.status_json()["profiles"], json!(["Everything"]));
+    }
+
+    #[test]
+    fn safe_mode_disables_content_mods_while_preserving_loaders_and_restores_them() {
+        let (d, _game, lib) = setup("safemode");
+        let loader = lib.add_from_dir(&stage(&d, "loader", &[("winhttp.dll", "hook"), ("loader.ini", "cfg")]), "UE4SS Loader", "loader.zip").unwrap();
+        let content1 = lib.add_from_dir(&stage(&d, "c1", &[("Data/textures.pak", "tex")]), "HD Textures", "c1.zip").unwrap();
+        let content2 = lib.add_from_dir(&stage(&d, "c2", &[("Data/weapons.esp", "esp")]), "Big Swords", "c2.zip").unwrap();
+
+        assert_eq!(lib.stage_safe_mode().unwrap(), 2);
+        let m = lib.mods();
+        assert!(m.iter().find(|x| x.id == loader.id).unwrap().enabled, "loader remains enabled");
+        assert!(!m.iter().find(|x| x.id == content1.id).unwrap().enabled, "content mod disabled");
+        assert!(!m.iter().find(|x| x.id == content2.id).unwrap().enabled, "content mod disabled");
+
+        lib.restore_safe_mode().unwrap();
+        let m2 = lib.mods();
+        assert!(m2.iter().find(|x| x.id == loader.id).unwrap().enabled);
+        assert!(m2.iter().find(|x| x.id == content1.id).unwrap().enabled);
+        assert!(m2.iter().find(|x| x.id == content2.id).unwrap().enabled);
     }
 
     #[test]

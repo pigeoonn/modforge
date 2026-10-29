@@ -1064,8 +1064,15 @@ impl RepairEngine {
             .collect()
     }
 
-    pub fn clear_shader_cache(game: &GameEntry) -> usize {
-        let mut roots = vec![PathBuf::from(&game.compatdata), PathBuf::from(&game.game_dir)];
+    pub fn clean_prefix_caches(game: &GameEntry) -> (usize, u64) {
+        let mut roots = vec![PathBuf::from(&game.game_dir)];
+        if !game.pfx.is_empty() {
+            roots.push(PathBuf::from(&game.pfx));
+        }
+        if !game.compatdata.is_empty() {
+            roots.push(PathBuf::from(&game.compatdata));
+            roots.push(PathBuf::from(&game.compatdata).join("pfx"));
+        }
         if !game.launches_directly() {
             // Steam keeps DXVK/VKD3D/Fossilize caches next to compatdata: <lib>/shadercache/<appid>
             if let Some(lib) = Path::new(&game.compatdata).parent().and_then(|p| p.parent()) {
@@ -1074,26 +1081,47 @@ impl RepairEngine {
         }
 
         let mut removed = 0;
+        let mut freed_bytes = 0u64;
+        let mut seen = std::collections::HashSet::new();
+
         for root in roots {
-            if !root.is_dir() {
+            if !root.is_dir() || !seen.insert(root.clone()) {
                 continue;
             }
-            for entry in WalkDir::new(root).max_depth(6).into_iter().flatten() {
+            for entry in WalkDir::new(root).max_depth(8).into_iter().flatten() {
                 let p = entry.path();
                 if !p.is_file() {
                     continue;
                 }
                 let fname = p.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
-                if (fname.ends_with(".dxvk-cache")
+                let path_lower = p.to_string_lossy().to_lowercase();
+
+                let is_cache = fname.ends_with(".dxvk-cache")
+                    || fname.ends_with(".dxvk-state-cache")
+                    || fname == "dxvk.cache"
                     || fname.contains("vkd3d-proton.cache")
-                    || fname.ends_with(".ushaderprecache"))
-                    && fs::remove_file(p).is_ok()
-                {
-                    removed += 1;
+                    || fname == "vkd3d.cache"
+                    || fname.ends_with(".ushaderprecache")
+                    || fname.ends_with(".fozcache")
+                    || fname.ends_with(".dxvk-nvapi.log");
+
+                let is_dump = fname.ends_with(".dmp")
+                    || (path_lower.contains("crashdumps") && (fname.ends_with(".tmp") || fname.ends_with(".dmp")));
+
+                if is_cache || is_dump {
+                    let sz = fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+                    if fs::remove_file(p).is_ok() {
+                        removed += 1;
+                        freed_bytes += sz;
+                    }
                 }
             }
         }
-        removed
+        (removed, freed_bytes)
+    }
+
+    pub fn clear_shader_cache(game: &GameEntry) -> usize {
+        Self::clean_prefix_caches(game).0
     }
 
     /// All `SaveGames` directories below `root` (outermost only).
@@ -1765,6 +1793,26 @@ mod tests {
         fs::write(PathBuf::from(&game.compatdata).join("vkd3d-proton.cache"), b"x").unwrap();
         assert_eq!(RepairEngine::clear_shader_cache(&game), 2);
         assert!(sc.join("keep.txt").is_file());
+    }
+
+    #[test]
+    fn prefix_cache_and_crash_dumps_cleaned_with_freed_bytes() {
+        let (d, mut game) = make_game("pfxclean");
+        let pfx = d.join("custom_pfx");
+        let dumps = pfx.join("drive_c/users/steamuser/AppData/Local/CrashDumps");
+        fs::create_dir_all(&dumps).unwrap();
+        fs::write(dumps.join("game_crash.dmp"), vec![0u8; 1024]).unwrap();
+
+        let dxvk = PathBuf::from(&game.compatdata).join("dxvk.cache");
+        fs::write(&dxvk, vec![0u8; 2048]).unwrap();
+
+        game.pfx = pfx.to_string_lossy().to_string();
+
+        let (count, freed) = RepairEngine::clean_prefix_caches(&game);
+        assert_eq!(count, 2);
+        assert_eq!(freed, 3072);
+        assert!(!dumps.join("game_crash.dmp").exists());
+        assert!(!dxvk.exists());
     }
 
     #[test]
