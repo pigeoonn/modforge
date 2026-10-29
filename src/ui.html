@@ -5759,9 +5759,17 @@
     navigator.clipboard.writeText(text).then(() => showToast(t('Copied.')), () => showToast(t('Could not copy.')));
   }
 
+  function addGameToSteamDeck(appid) {
+    if (confirm(t('Sync this game to Steam Deck / Steam library? If Steam is running, ModForge will restart it to apply the shortcut.'))) {
+      ipcSend('/api/steam_shortcut', { appid: appid || '', close_steam: true });
+      showToast(t('Syncing game to Steam Deck…'));
+    }
+  }
+
   function openMoreMenu(e) {
     e.stopPropagation();
     closeCtx();
+    const g = appState.games[appState.selected_idx];
     const items = [
       [t('📤 Share as modpack'), () => shareModpack()],
       [t('📥 Import a modpack'), () => ipcSend('/api/lib_import', {})],
@@ -5771,6 +5779,7 @@
       [t('🧭 Fix placement'), () => modLibRelayout()],
       [t('📁 Folder'), () => ipcSend('/api/lib_open')],
     ];
+    if (g && appState.os === 'linux') items.push([t('🎮 Sync to Steam Deck'), () => addGameToSteamDeck(g.appid)]);
     const m = document.createElement('div');
     m.className = 'ctx-menu';
     items.forEach(([label, fn]) => {
@@ -5797,6 +5806,7 @@
     const items = [[t('○ Play without mods'), () => ipcSend('/api/play_vanilla', {})]]
       .concat((lib.profiles || []).map(p => [t('Play with “{}”', p), () => ipcSend('/api/play_profile', { name: p })]));
     if (g && appState.os !== 'macos') items.push([t('🖥 Create a shortcut for this game'), () => ipcSend('/api/game_shortcut', { appid: g.appid, desktop: true })]);
+    if (g && appState.os === 'linux') items.push([t('🎮 Add to Steam (Steam Deck)'), () => addGameToSteamDeck(g.appid)]);
     const m = document.createElement('div');
     m.className = 'ctx-menu';
     items.forEach(([label, fn]) => {

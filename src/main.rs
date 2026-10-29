@@ -6595,8 +6595,18 @@ fn dispatch_action(path: &str, body: &Value, state: &SharedState) -> bool {
         }
         "/api/steam_shortcut" => {
             let close_steam = body.get("close_steam").and_then(Value::as_bool).unwrap_or(false);
+            let appid = body.get("appid").and_then(Value::as_str).map(|s| s.to_string());
             let state_bg = Arc::clone(state);
-            thread::spawn(move || match add_gantry_to_steam(&state_bg, close_steam) {
+            thread::spawn(move || match sync_to_steam(&state_bg, appid.as_deref(), close_steam) {
+                Ok(m) => log(&state_bg, "OK", m),
+                Err(e) => log(&state_bg, "WARN", e),
+            });
+        }
+        "/api/steam_deck_sync" => {
+            let close_steam = body.get("close_steam").and_then(Value::as_bool).unwrap_or(true);
+            let appid = body.get("appid").and_then(Value::as_str).map(|s| s.to_string());
+            let state_bg = Arc::clone(state);
+            thread::spawn(move || match sync_to_steam(&state_bg, appid.as_deref(), close_steam) {
                 Ok(m) => log(&state_bg, "OK", m),
                 Err(e) => log(&state_bg, "WARN", e),
             });
@@ -7819,32 +7829,91 @@ fn shutdown_steam(env: &SteamEnv) -> Result<(), String> {
     Err("Steam did not close within 40 seconds; nothing was changed.".into())
 }
 
-/// Put Gantry into Steam's library as a non-Steam game (for Big Picture and the Steam Deck's game mode), for every
-/// Steam account on this computer. Steam has to be closed: it rewrites the file when it exits.
-fn add_gantry_to_steam(state: &SharedState, close_steam: bool) -> Result<String, String> {
+/// Put ModForge or a game into Steam's library as a non-Steam game (for Big Picture and the Steam Deck's game mode),
+/// syncing shortcuts and artwork for every Steam account on this computer.
+fn sync_to_steam(state: &SharedState, appid: Option<&str>, close_steam: bool) -> Result<String, String> {
     let (env, games) = {
         let st = read_state(state);
         (st.steam_env.clone(), st.games.clone())
     };
     let configs: Vec<PathBuf> = env.localconfigs().iter().filter_map(|p| steamshortcut::path_beside(p)).collect();
     if configs.is_empty() {
-        return Err("Steam's account folder was not found, so Gantry could not be added to Steam.".into());
+        return Err("Steam's account folder was not found, so games could not be added to Steam.".into());
     }
-    let exe = selfupdate::target().or_else(|| std::env::current_exe().ok()).ok_or("Gantry could not tell where it is installed.")?;
-    let (exe_s, dir_s) = (exe.to_string_lossy().to_string(), exe.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default());
-    // read everything first: if any file is in a form we do not know, nothing is written
+
+    let is_modforge = appid.is_none() || appid == Some("") || appid == Some("modforge");
+    if is_modforge {
+        let exe = selfupdate::target().or_else(|| std::env::current_exe().ok()).ok_or("Gantry could not tell where it is installed.")?;
+        let (exe_s, dir_s) = (exe.to_string_lossy().to_string(), exe.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default());
+        let mut todo = Vec::new();
+        for path in &configs {
+            let old = fs::read(path).unwrap_or_default();
+            match steamshortcut::has_gantry(&old, &exe_s) {
+                None => return Err("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.".into()),
+                Some(true) => {}
+                Some(false) => todo.push((path.clone(), old)),
+            }
+        }
+        if todo.is_empty() {
+            return Ok("Gantry is already in Steam's library.".into());
+        }
+        let mut restart = false;
+        if env.running() {
+            if !close_steam {
+                return Err("Steam is running. Close it first, then try again.".into());
+            }
+            if games.iter().any(procs::is_game_running) {
+                return Err("A game is running. Close it first: Steam would end it too.".into());
+            }
+            log(state, "INFO", "Closing Steam to add Gantry to its library...");
+            shutdown_steam(&env)?;
+            restart = true;
+        }
+        for (path, old) in todo {
+            let new = steamshortcut::add_gantry(&old, &exe_s, &dir_s, "--deck")?;
+            fsutil::atomic_write_kept(&path, new).map_err(|e| format!("Could not write Steam's shortcuts file: {}", e))?;
+            if let Some(parent) = path.parent() {
+                let grid_dir = parent.join("grid");
+                let art = crate::install::ICON_PNG;
+                let _ = steamshortcut::sync_grid_artwork(&grid_dir, &exe_s, steamshortcut::NAME, Some(art), Some(art), Some(art), Some(art), Some(art));
+            }
+        }
+        if restart && env.running.is_none() {
+            let mut c = Command::new("steam");
+            c.arg("-silent").stdout(Stdio::null()).stderr(Stdio::null());
+            spawn_reaped(c);
+        }
+        return Ok("Gantry is in Steam's library now. It opens in controller mode from Big Picture and on a Steam Deck.".into());
+    }
+
+    // Syncing a specific game (custom standalone game or modded Steam game shortcut)
+    let target_id = appid.unwrap();
+    let g = games.iter().find(|x| x.appid == target_id).ok_or_else(|| format!("Game '{}' not found.", target_id))?;
+    let g_dir = Path::new(&g.game_dir);
+    let (name, exe_s, dir_s, args_s, icon_s, art) = if g.is_custom {
+        let full_exe = g_dir.join(&g.exe_path);
+        let exe_s = full_exe.to_string_lossy().to_string();
+        let dir_s = g.game_dir.clone();
+        let icon_p = g_dir.join("icon.png");
+        let icon_s = if icon_p.exists() { icon_p.to_string_lossy().to_string() } else { "".to_string() };
+        let art = fs::read(g_dir.join("icon.png")).or_else(|_| fs::read(g_dir.join("cover.png"))).ok();
+        (g.name.clone(), exe_s, dir_s, g.launch_args.clone(), icon_s, art)
+    } else {
+        let mf_exe = selfupdate::target().or_else(|| std::env::current_exe().ok()).ok_or("ModForge could not tell where it is installed.")?;
+        let exe_s = mf_exe.to_string_lossy().to_string();
+        let dir_s = mf_exe.parent().map(|p| p.to_string_lossy().to_string()).unwrap_or_default();
+        (format!("{} (ModForge)", g.name), exe_s, dir_s, format!("--start {}", g.appid), "".to_string(), Some(crate::install::ICON_PNG.to_vec()))
+    };
+
     let mut todo = Vec::new();
     for path in &configs {
         let old = fs::read(path).unwrap_or_default();
-        match steamshortcut::has_gantry(&old, &exe_s) {
-            None => return Err("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.".into()),
-            Some(true) => {}
-            Some(false) => todo.push((path.clone(), old)),
+        if steamshortcut::has_shortcut(&old, &name, &exe_s).is_none() && !old.is_empty() {
+            return Err("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.".into());
         }
+        todo.push((path.clone(), old));
     }
-    if todo.is_empty() {
-        return Ok("Gantry is already in Steam's library.".into());
-    }
+
     let mut restart = false;
     if env.running() {
         if !close_steam {
@@ -7857,16 +7926,31 @@ fn add_gantry_to_steam(state: &SharedState, close_steam: bool) -> Result<String,
         shutdown_steam(&env)?;
         restart = true;
     }
+
+    let tags = vec!["ModForge".to_string(), "Modded".to_string()];
     for (path, old) in todo {
-        let new = steamshortcut::add_gantry(&old, &exe_s, &dir_s, "--deck")?;
+        let (new, _sid) = steamshortcut::add_shortcut(&old, &name, &exe_s, &dir_s, &args_s, &icon_s, &tags)?;
         fsutil::atomic_write_kept(&path, new).map_err(|e| format!("Could not write Steam's shortcuts file: {}", e))?;
+        if let Some(parent) = path.parent() {
+            let grid_dir = parent.join("grid");
+            if let Some(ref b) = art {
+                let _ = steamshortcut::sync_grid_artwork(&grid_dir, &exe_s, &name, Some(b.as_slice()), Some(b.as_slice()), Some(b.as_slice()), Some(b.as_slice()), Some(b.as_slice()));
+            }
+        }
     }
+
     if restart && env.running.is_none() {
         let mut c = Command::new("steam");
         c.arg("-silent").stdout(Stdio::null()).stderr(Stdio::null());
         spawn_reaped(c);
     }
-    Ok("Gantry is in Steam's library now. It opens in controller mode from Big Picture and on a Steam Deck.".into())
+
+    Ok(format!("'{}' is in Steam's library now for Steam Deck Game Mode.", name))
+}
+
+#[allow(dead_code)]
+fn add_gantry_to_steam(state: &SharedState, close_steam: bool) -> Result<String, String> {
+    sync_to_steam(state, None, close_steam)
 }
 
 /// Make Steam's launch options for `g` match rig's settings.
@@ -17833,5 +17917,50 @@ mod tests {
             let m = lib.mods();
             m[0].id == id_c && m[1].id == id_a
         });
+    }
+
+    #[test]
+    fn steam_deck_sync_syncs_custom_game_shortcut_and_grid_artwork() {
+        let h = harness("deck_sync");
+        let cfg = h._dir.join("steam-acct/config");
+        fs::create_dir_all(&cfg).unwrap();
+        let file = cfg.join("shortcuts.vdf");
+        let grid = cfg.join("grid");
+
+        let g_dir = h._dir.join("MyGame");
+        fs::create_dir_all(&g_dir).unwrap();
+        fs::write(g_dir.join("game.exe"), b"MZ custom").unwrap();
+        fs::write(g_dir.join("icon.png"), b"CUSTOM_ART").unwrap();
+
+        let custom_game: engine::GameEntry = serde_json::from_value(json!({
+            "appid": "custom-mygame",
+            "name": "My Indie Game",
+            "game_dir": g_dir.to_string_lossy(),
+            "exe_path": "game.exe",
+            "is_custom": true,
+            "is_installed": true,
+            "launch_args": "-novid",
+        })).unwrap();
+
+        {
+            let mut st = h.state.write().unwrap();
+            st.steam_env.localconfig = Some(cfg.join("localconfig.vdf"));
+            st.steam_env.running = Some(false);
+            st.games.push(custom_game);
+        }
+
+        api(&h, "/api/steam_deck_sync", json!({ "appid": "custom-mygame", "close_steam": true }));
+        wait_until("game synced to steam deck", || last_log(&h).contains("is in Steam's library now for Steam Deck Game Mode"));
+
+        assert!(file.exists());
+        let bytes = fs::read(&file).unwrap();
+        let list = steamshortcut::list_shortcuts(&bytes).unwrap();
+        let item = list.iter().find(|s| s.name == "My Indie Game").expect("found in shortcuts.vdf");
+        assert_eq!(item.launch_options, "-novid");
+        assert!(item.tags.contains(&"ModForge".to_string()));
+
+        let sid = item.appid;
+        assert!(grid.join(format!("{sid}p.png")).exists());
+        assert_eq!(fs::read(grid.join(format!("{sid}p.png"))).unwrap(), b"CUSTOM_ART");
     }
 }

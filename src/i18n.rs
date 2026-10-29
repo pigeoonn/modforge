@@ -252,6 +252,9 @@ mod tests {
         "Moved selected mods to bottom of load order.",
         "Update rule set for {} mod(s).",
         "Target folder set for {} mod(s).",
+        "'{}' is in Steam's library now for Steam Deck Game Mode.",
+        "Game '{}' not found.",
+        "Steam's account folder was not found, so games could not be added to Steam.",
         "{csp}; img-src 'self' data: https://shared.fastly.steamstatic.com{hosts}; connect-src 'self'",
         "Windows did not accept the change.",
         "\"{exe}\" \"%1\"",
@@ -326,6 +329,9 @@ mod tests {
         "Install folder for selected mods (leave empty for default game directory):",
         "Group / tag for this mod (leave empty to remove):",
         "⤊ To Top", "⤋ To Bottom", "⤊", "⤋",
+        "🎮 Add to Steam (Steam Deck)", "🎮 Sync to Steam Deck",
+        "Sync this game to Steam Deck / Steam library? If Steam is running, ModForge will restart it to apply the shortcut.",
+        "Syncing game to Steam Deck…",
     ];
 
     const MESSAGE_SOURCES: &[&str] = &[

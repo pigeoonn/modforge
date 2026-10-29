@@ -1,0 +1,50 @@
+app-id: org.modforge.ModForge
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: modforge
+
+finish-args:
+  # Graphical Display
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+
+  # Network (Nexus Mods, Thunderstore, Mod.io, GitHub downloads)
+  - --share=network
+
+  # File Access: Steam installations, common game locations, and microSD cards
+  - --filesystem=xdg-run/p11-kit
+  - --filesystem=~/.steam
+  - --filesystem=~/.local/share/Steam
+  - --filesystem=~/.var/app/com.valvesoftware.Steam
+  - --filesystem=/run/media:ro
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
+  - --filesystem=host
+
+  # Notifications & desktop integration
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.portal.*
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/modforge/cargo
+
+modules:
+  - name: modforge
+    buildsystem: simple
+    build-commands:
+      - cargo --offline fetch --manifest-path Cargo.toml || true
+      - cargo build --release
+      - install -Dm755 target/release/modforge /app/bin/modforge
+      - install -Dm644 packaging/modforge.desktop /app/share/applications/org.modforge.ModForge.desktop
+      - install -Dm644 packaging/flatpak/org.modforge.ModForge.metainfo.xml /app/share/metainfo/org.modforge.ModForge.metainfo.xml
+      - install -Dm644 src/icon.png /app/share/icons/hicolor/256x256/apps/org.modforge.ModForge.png
+    sources:
+      - type: dir
+        path: ../..

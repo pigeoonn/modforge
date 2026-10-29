@@ -5,7 +5,7 @@ use crate::fsutil::atomic_write;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const ICON_PNG: &[u8] = include_bytes!("icon.png");
+pub const ICON_PNG: &[u8] = include_bytes!("icon.png");
 const ICON_SVG: &str = include_str!("icon.svg");
 
 pub fn exec_quote(p: &Path) -> String {

@@ -5,6 +5,7 @@
 //! it when it exits, so it is only edited while Steam is closed. The edit adds one entry before the final end markers
 //! and leaves every other byte alone; the file is read as a whole first and left untouched if it does not look right.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 /// The name the entry has in Steam's library.
@@ -77,10 +78,73 @@ fn entries(b: &[u8]) -> Option<Vec<(u64, String, String)>> {
     Some(out)
 }
 
+/// A parsed Steam non-Steam shortcut entry.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Shortcut {
+    pub index: u64,
+    pub appid: u32,
+    pub name: String,
+    pub exe: String,
+    pub start_dir: String,
+    pub launch_options: String,
+    pub icon: String,
+    pub tags: Vec<String>,
+}
+
+/// List all shortcuts in the file.
+pub fn list_shortcuts(b: &[u8]) -> Option<Vec<Shortcut>> {
+    if b.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut at = 0;
+    let top = map(b, &mut at, 0)?;
+    if at != b.len() {
+        return None;
+    }
+    let (_, Val::Map(list)) = top.into_iter().find(|(k, _)| k.eq_ignore_ascii_case("shortcuts"))? else { return None };
+    let mut out = Vec::new();
+    for (k, v) in list {
+        let Val::Map(fields) = v else { return None };
+        let get_str = |name: &str| fields.iter().find(|(f, _)| f.eq_ignore_ascii_case(name)).and_then(|(_, val)| if let Val::Str(s) = val { Some(s.clone()) } else { None }).unwrap_or_default();
+        let get_num = |name: &str| fields.iter().find(|(f, _)| f.eq_ignore_ascii_case(name)).and_then(|(_, val)| if let Val::Num(n) = val { Some(*n) } else { None }).unwrap_or(0);
+        let tags = fields.iter().find(|(f, _)| f.eq_ignore_ascii_case("tags")).and_then(|(_, val)| {
+            if let Val::Map(sub) = val {
+                Some(sub.iter().filter_map(|(_, tv)| if let Val::Str(s) = tv { Some(s.clone()) } else { None }).collect())
+            } else {
+                None
+            }
+        }).unwrap_or_default();
+        let name = get_str("AppName");
+        let exe = get_str("Exe").trim_matches('"').to_string();
+        let mut appid = get_num("appid");
+        if appid == 0 {
+            appid = shortcut_appid(&exe, &name);
+        }
+        out.push(Shortcut {
+            index: k.parse().unwrap_or(0),
+            appid,
+            name,
+            exe,
+            start_dir: get_str("StartDir").trim_matches('"').to_string(),
+            launch_options: get_str("LaunchOptions"),
+            icon: get_str("icon"),
+            tags,
+        });
+    }
+    Some(out)
+}
+
 /// Is Gantry (this program) already one of the shortcuts?
 pub fn has_gantry(file: &[u8], exe: &str) -> Option<bool> {
     let list = entries(file)?;
-    Some(list.iter().any(|(_, name, e)| name == NAME || e.trim_matches('"') == exe))
+    Some(list.iter().any(|(_, name, e)| name == NAME || name == "Gantry" || name == "ModForge" || e.trim_matches('"') == exe))
+}
+
+/// Checks if a shortcut with the given name or executable exists.
+pub fn has_shortcut(file: &[u8], name: &str, exe: &str) -> Option<bool> {
+    let list = entries(file)?;
+    let clean_exe = exe.trim_matches('"');
+    Some(list.iter().any(|(_, n, e)| n == name || e.trim_matches('"') == clean_exe))
 }
 
 fn crc32(data: &[u8]) -> u32 {
@@ -114,15 +178,15 @@ fn push_num(out: &mut Vec<u8>, key: &str, value: u32) {
     out.extend(value.to_le_bytes());
 }
 
-fn entry(index: u64, exe: &str, start_dir: &str, args: &str) -> Vec<u8> {
+fn make_entry(index: u64, name: &str, exe: &str, start_dir: &str, args: &str, icon: &str, tags: &[String]) -> Vec<u8> {
     let mut o = vec![0];
     o.extend(index.to_string().as_bytes());
     o.push(0);
-    push_num(&mut o, "appid", shortcut_appid(exe, NAME));
-    push_str(&mut o, "AppName", NAME);
+    push_num(&mut o, "appid", shortcut_appid(exe, name));
+    push_str(&mut o, "AppName", name);
     push_str(&mut o, "Exe", &format!("\"{exe}\""));
     push_str(&mut o, "StartDir", &format!("\"{start_dir}\""));
-    push_str(&mut o, "icon", "");
+    push_str(&mut o, "icon", icon);
     push_str(&mut o, "ShortcutPath", "");
     push_str(&mut o, "LaunchOptions", args);
     push_num(&mut o, "IsHidden", 0);
@@ -137,9 +201,137 @@ fn entry(index: u64, exe: &str, start_dir: &str, args: &str) -> Vec<u8> {
     o.push(0);
     o.extend(b"tags");
     o.push(0);
+    for (t_idx, tag) in tags.iter().enumerate() {
+        push_str(&mut o, &t_idx.to_string(), tag);
+    }
     o.push(8);
     o.push(8);
     o
+}
+
+fn entry(index: u64, exe: &str, start_dir: &str, args: &str) -> Vec<u8> {
+    make_entry(index, NAME, exe, start_dir, args, "", &[])
+}
+
+fn serialize_file(list: &[(String, Val)]) -> Vec<u8> {
+    let mut out = vec![0];
+    out.extend(b"shortcuts\0");
+    for (k, v) in list {
+        if let Val::Map(fields) = v {
+            out.push(0);
+            out.extend(k.as_bytes());
+            out.push(0);
+            for (fk, fv) in fields {
+                match fv {
+                    Val::Str(s) => push_str(&mut out, fk, s),
+                    Val::Num(n) => push_num(&mut out, fk, *n),
+                    Val::Map(sub) => {
+                        out.push(0);
+                        out.extend(fk.as_bytes());
+                        out.push(0);
+                        for (sk, sv) in sub {
+                            match sv {
+                                Val::Str(s) => push_str(&mut out, sk, s),
+                                Val::Num(n) => push_num(&mut out, sk, *n),
+                                _ => {}
+                            }
+                        }
+                        out.push(8);
+                    }
+                }
+            }
+            out.push(8);
+        }
+    }
+    out.push(8);
+    out.push(8);
+    out
+}
+
+/// Remove a shortcut matching name or executable from shortcuts.vdf.
+pub fn remove_shortcut(file: &[u8], name: &str, exe: &str) -> Result<Vec<u8>, String> {
+    if file.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut at = 0;
+    let top = map(file, &mut at, 0).ok_or("Invalid shortcuts file format.")?;
+    if at != file.len() {
+        return Err("Unexpected trailing data in shortcuts file.".into());
+    }
+    let (_, Val::Map(list)) = top.into_iter().find(|(k, _)| k.eq_ignore_ascii_case("shortcuts")).ok_or("Missing shortcuts root.")? else {
+        return Err("Malformed shortcuts root.".into());
+    };
+    let exe_clean = exe.trim_matches('"');
+    let mut filtered = Vec::new();
+    for (_, v) in list {
+        if let Val::Map(ref fields) = v {
+            let matches_name = fields.iter().any(|(f, val)| f.eq_ignore_ascii_case("AppName") && matches!(val, Val::Str(s) if s == name));
+            let matches_exe = fields.iter().any(|(f, val)| f.eq_ignore_ascii_case("Exe") && matches!(val, Val::Str(s) if s.trim_matches('"') == exe_clean));
+            if matches_name || matches_exe {
+                continue;
+            }
+        }
+        filtered.push(v);
+    }
+    let reindexed: Vec<(String, Val)> = filtered.into_iter().enumerate().map(|(i, val)| (i.to_string(), val)).collect();
+    Ok(serialize_file(&reindexed))
+}
+
+/// Add or update a shortcut in shortcuts.vdf.
+pub fn add_shortcut(
+    file: &[u8],
+    name: &str,
+    exe: &str,
+    start_dir: &str,
+    args: &str,
+    icon: &str,
+    tags: &[String],
+) -> Result<(Vec<u8>, u32), String> {
+    let clean = if !file.is_empty() && has_shortcut(file, name, exe).unwrap_or(false) {
+        remove_shortcut(file, name, exe)?
+    } else if file.is_empty() {
+        b"\0shortcuts\0\x08\x08".to_vec()
+    } else {
+        file.to_vec()
+    };
+    let list = entries(&clean).ok_or("Steam's shortcuts file has a form Gantry does not know, so it was left as it is.")?;
+    let next = list.iter().map(|(i, _, _)| i + 1).max().unwrap_or(0);
+    let appid = shortcut_appid(exe, name);
+    let mut out = clean;
+    let at = out.len() - 2;
+    out.splice(at..at, make_entry(next, name, exe, start_dir, args, icon, tags));
+    Ok((out, appid))
+}
+
+/// Sync grid artwork images to Steam's userdata/<id>/config/grid/ folder.
+pub fn sync_grid_artwork(
+    grid_dir: &Path,
+    exe: &str,
+    name: &str,
+    icon: Option<&[u8]>,
+    poster: Option<&[u8]>,
+    banner: Option<&[u8]>,
+    hero: Option<&[u8]>,
+    logo: Option<&[u8]>,
+) -> Result<u32, String> {
+    if !grid_dir.exists() {
+        fs::create_dir_all(grid_dir).map_err(|e| format!("Could not create grid directory: {e}"))?;
+    }
+    let id = shortcut_appid(exe, name);
+    let big_id = ((id as u64) << 32) | 0x02000000;
+    let write_art = |suffix: &str, bytes: &[u8]| -> Result<(), String> {
+        let p1 = grid_dir.join(format!("{id}{suffix}"));
+        let p2 = grid_dir.join(format!("{big_id}{suffix}"));
+        let _ = fs::write(&p1, bytes);
+        let _ = fs::write(&p2, bytes);
+        Ok(())
+    };
+    if let Some(b) = icon { write_art("_icon.png", b)?; }
+    if let Some(b) = poster { write_art("p.png", b)?; }
+    if let Some(b) = banner { write_art(".png", b)?; }
+    if let Some(b) = hero { write_art("_hero.png", b)?; }
+    if let Some(b) = logo { write_art("_logo.png", b)?; }
+    Ok(id)
 }
 
 /// `file` with a Gantry entry added. An empty or missing file becomes a file with just that entry.
@@ -223,5 +415,56 @@ mod tests {
     #[test]
     fn the_file_sits_beside_the_launch_options_file() {
         assert_eq!(path_beside(Path::new("/s/userdata/1/config/localconfig.vdf")), Some(PathBuf::from("/s/userdata/1/config/shortcuts.vdf")));
+    }
+
+    #[test]
+    fn custom_game_shortcut_add_list_update_and_remove() {
+        let empty = b"";
+        let (f1, appid1) = add_shortcut(empty, "Hollow Knight", "/games/hk/hollow_knight.exe", "/games/hk", "--modded", "/games/hk/icon.png", &["Metroidvania".into(), "ModForge".into()]).unwrap();
+        assert_eq!(appid1, shortcut_appid("/games/hk/hollow_knight.exe", "Hollow Knight"));
+        assert!(has_shortcut(&f1, "Hollow Knight", "/games/hk/hollow_knight.exe").unwrap());
+
+        // Add second game
+        let (f2, appid2) = add_shortcut(&f1, "Silksong", "/games/ss/silksong.exe", "/games/ss", "", "", &[]).unwrap();
+        assert_ne!(appid1, appid2);
+
+        let list = list_shortcuts(&f2).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].name, "Hollow Knight");
+        assert_eq!(list[0].tags, vec!["Metroidvania".to_string(), "ModForge".to_string()]);
+        assert_eq!(list[1].name, "Silksong");
+
+        // Update first game (e.g. changed launch options)
+        let (f3, appid3) = add_shortcut(&f2, "Hollow Knight", "/games/hk/hollow_knight.exe", "/games/hk", "--new-args", "/games/hk/icon.png", &["Updated".into()]).unwrap();
+        assert_eq!(appid1, appid3);
+        let list3 = list_shortcuts(&f3).unwrap();
+        assert_eq!(list3.len(), 2);
+        let hk = list3.iter().find(|s| s.name == "Hollow Knight").unwrap();
+        assert_eq!(hk.launch_options, "--new-args");
+        assert_eq!(hk.tags, vec!["Updated".to_string()]);
+
+        // Remove Silksong
+        let f4 = remove_shortcut(&f3, "Silksong", "/games/ss/silksong.exe").unwrap();
+        let list4 = list_shortcuts(&f4).unwrap();
+        assert_eq!(list4.len(), 1);
+        assert_eq!(list4[0].name, "Hollow Knight");
+    }
+
+    #[test]
+    fn sync_grid_artwork_writes_standard_and_big_appid_images() {
+        let dir = std::env::temp_dir().join(format!("steamshortcut_grid_{}", crate::fsutil::unique_token()));
+        let _ = fs::create_dir_all(&dir);
+        let grid = dir.join("grid");
+        let id = sync_grid_artwork(&grid, "/games/hk/game.exe", "HK", Some(b"ICON"), Some(b"POSTER"), Some(b"BANNER"), Some(b"HERO"), Some(b"LOGO")).unwrap();
+        let big = ((id as u64) << 32) | 0x02000000;
+
+        assert_eq!(fs::read(grid.join(format!("{id}p.png"))).unwrap(), b"POSTER");
+        assert_eq!(fs::read(grid.join(format!("{big}p.png"))).unwrap(), b"POSTER");
+        assert_eq!(fs::read(grid.join(format!("{id}.png"))).unwrap(), b"BANNER");
+        assert_eq!(fs::read(grid.join(format!("{big}.png"))).unwrap(), b"BANNER");
+        assert_eq!(fs::read(grid.join(format!("{id}_hero.png"))).unwrap(), b"HERO");
+        assert_eq!(fs::read(grid.join(format!("{id}_logo.png"))).unwrap(), b"LOGO");
+        assert_eq!(fs::read(grid.join(format!("{id}_icon.png"))).unwrap(), b"ICON");
+        let _ = fs::remove_dir_all(&dir);
     }
 }

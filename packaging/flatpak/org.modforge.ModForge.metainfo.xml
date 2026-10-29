@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.modforge.ModForge</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>ModForge</name>
+  <summary>Universal Game &amp; Mod Studio for Linux, Steam Deck &amp; PC</summary>
+
+  <description>
+    <p>
+      ModForge is an ultra-fast, modern, zero-dependency universal mod manager and game companion.
+      Engineered natively for Linux, Steam Deck, and Windows.
+    </p>
+    <ul>
+      <li>Seamless mod management across Unreal Engine, Unity (BepInEx/MelonLoader), Godot, Bethesda, and Source games.</li>
+      <li>Automatic dependency resolution, download queueing, and multi-profile save separation.</li>
+      <li>Conflict visualizer with priority reordering and file pinning.</li>
+      <li>Native Steam Deck Gaming Mode shortcut and artwork synchronization.</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">org.modforge.ModForge.desktop</launchable>
+
+  <provides>
+    <binary>modforge</binary>
+  </provides>
+
+  <categories>
+    <category>Game</category>
+    <category>Utility</category>
+  </categories>
+
+  <developer_name>ModForge Contributors</developer_name>
+  <url type="homepage">https://github.com/pigeoonn/gantry</url>
+  <url type="bugtracker">https://github.com/pigeoonn/gantry/issues</url>
+
+  <releases>
+    <release version="6.0.0" date="2026-10-29">
+      <description>
+        <p>Option 1-4 Feature Suite: Expanded Engine Support, Priority Visualizer, Steam Deck Integration, and Diagnostic Benchmark.</p>
+      </description>
+    </release>
+  </releases>
+</component>
