@@ -27,7 +27,7 @@ jobs:
       # Opens the real interface in headless Chrome, in every language, and fails on script errors or
       # text with an unfilled placeholder.
       - name: Interface check
-        run: node tests/ui_smoke.mjs "$PWD/target/release/rig" google-chrome "$PWD/screens"
+        run: node tests/ui_smoke.mjs "$PWD/target/release/modforge" google-chrome "$PWD/screens"
       - uses: actions/upload-artifact@v4
         with:
           name: screens-linux
@@ -46,10 +46,10 @@ jobs:
         run: cargo build --release
       - name: Program starts
         shell: bash
-        run: target/release/rig.exe --version
+        run: target/release/modforge.exe --version
       - name: Interface check
         shell: bash
-        run: node tests/ui_smoke.mjs "$PWD/target/release/rig.exe" "C:/Program Files/Google/Chrome/Application/chrome.exe" "$PWD/screens"
+        run: node tests/ui_smoke.mjs "$PWD/target/release/modforge.exe" "C:/Program Files/Google/Chrome/Application/chrome.exe" "$PWD/screens"
       - uses: actions/upload-artifact@v4
         with:
           name: screens-windows
@@ -66,16 +66,16 @@ jobs:
       - name: Release build
         run: cargo build --release
       - name: Program starts
-        run: target/release/rig --version
+        run: target/release/modforge --version
       - name: Interface check
-        run: node tests/ui_smoke.mjs "$PWD/target/release/rig" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" "$PWD/screens"
+        run: node tests/ui_smoke.mjs "$PWD/target/release/modforge" "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" "$PWD/screens"
       - uses: actions/upload-artifact@v4
         with:
           name: screens-macos
           path: screens
           retention-days: 7
 
-  # Gantry is Linux-first; this keeps the code from drifting away from a Windows port.
+  # ModForge is Linux-first; this keeps the code from drifting away from a Windows port.
   windows-check:
     runs-on: ubuntu-latest
     steps:

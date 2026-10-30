@@ -1,5 +1,5 @@
 name: An idea
-description: Something Gantry could do
+description: Something ModForge could do
 labels: [idea]
 body:
   - type: textarea

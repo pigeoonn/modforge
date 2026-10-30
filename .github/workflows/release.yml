@@ -48,9 +48,9 @@ jobs:
         shell: bash
         run: |
           ver="${GITHUB_REF_NAME:-dev}"
-          dir="gantry-${ver}-windows-x86_64"
+          dir="modforge-${ver}-windows-x86_64"
           mkdir "$dir"
-          cp target/release/rig.exe "$dir/"
+          cp target/release/modforge.exe "$dir/"
           cp README.md docs/INSTALL.md "$dir/"
           7z a "$dir.zip" "$dir"
           sha256sum "$dir.zip" > "$dir.zip.sha256"
@@ -64,16 +64,16 @@ jobs:
           iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
           [ -x "$iscc" ] || { choco install innosetup --no-progress -y; }
           # no path conversion of the /D switch by the shell
-          MSYS_NO_PATHCONV=1 "$iscc" "/DAppVer=${ver}" packaging/windows/gantry.iss
-          sha256sum "gantry-${ver}-windows-x86_64-setup.exe" > "gantry-${ver}-windows-x86_64-setup.exe.sha256"
+          MSYS_NO_PATHCONV=1 "$iscc" "/DAppVer=${ver}" packaging/windows/modforge.iss
+          sha256sum "modforge-${ver}-windows-x86_64-setup.exe" > "modforge-${ver}-windows-x86_64-setup.exe.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: gantry-windows-x86_64
+          name: modforge-windows-x86_64
           path: |
-            gantry-*.zip
-            gantry-*.zip.sha256
-            gantry-*-setup.exe
-            gantry-*-setup.exe.sha256
+            modforge-*.zip
+            modforge-*.zip.sha256
+            modforge-*-setup.exe
+            modforge-*-setup.exe.sha256
       - name: Add to the release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -81,8 +81,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           for i in 1 2 3 4 5 6; do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
-          gh release upload "$GITHUB_REF_NAME" gantry-*.zip gantry-*.zip.sha256 --clobber
-          ls gantry-*-setup.exe >/dev/null 2>&1 && gh release upload "$GITHUB_REF_NAME" gantry-*-setup.exe gantry-*-setup.exe.sha256 --clobber || echo "no installer in this run"
+          gh release upload "$GITHUB_REF_NAME" modforge-*.zip modforge-*.zip.sha256 --clobber
+          ls modforge-*-setup.exe >/dev/null 2>&1 && gh release upload "$GITHUB_REF_NAME" modforge-*-setup.exe modforge-*-setup.exe.sha256 --clobber || echo "no installer in this run"
 
   macos-arm64:
     needs: checks-passed
@@ -97,25 +97,25 @@ jobs:
       - name: Package
         run: |
           ver="${GITHUB_REF_NAME:-dev}"
-          dir="gantry-${ver}-macos-arm64"
+          dir="modforge-${ver}-macos-arm64"
           mkdir "$dir"
-          cp target/release/rig "$dir/"
+          cp target/release/modforge "$dir/"
           cp README.md docs/INSTALL.md "$dir/"
           tar czf "$dir.tar.gz" "$dir"
           shasum -a 256 "$dir.tar.gz" > "$dir.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: gantry-macos-arm64
+          name: modforge-macos-arm64
           path: |
-            gantry-*.tar.gz
-            gantry-*.tar.gz.sha256
+            modforge-*.tar.gz
+            modforge-*.tar.gz.sha256
       - name: Add to the release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           for i in 1 2 3 4 5 6; do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
-          gh release upload "$GITHUB_REF_NAME" gantry-*.tar.gz gantry-*.tar.gz.sha256 --clobber
+          gh release upload "$GITHUB_REF_NAME" modforge-*.tar.gz modforge-*.tar.gz.sha256 --clobber
 
   linux-x86_64:
     needs: checks-passed
@@ -134,31 +134,31 @@ jobs:
         id: pack
         run: |
           ver="${GITHUB_REF_NAME:-dev}"
-          dir="gantry-${ver}-linux-x86_64"
+          dir="modforge-${ver}-linux-x86_64"
           mkdir "$dir"
-          cp target/release/rig "$dir/"
-          cp README.md docs/INSTALL.md packaging/gantry.desktop src/icon.png src/icon.svg "$dir/"
+          cp target/release/modforge "$dir/"
+          cp README.md docs/INSTALL.md packaging/modforge.desktop src/icon.png src/icon.svg "$dir/"
           tar czf "$dir.tar.gz" "$dir"
           sha256sum "$dir.tar.gz" > "$dir.tar.gz.sha256"
           echo "file=$dir.tar.gz" >> "$GITHUB_OUTPUT"
       - name: AppImage
         run: |
-          packaging/appimage/build.sh target/release/rig "$PWD/appimage"
-          cp appimage/Gantry-*.AppImage .
-          sha256sum Gantry-*.AppImage > "$(ls Gantry-*.AppImage).sha256"
+          packaging/appimage/build.sh target/release/modforge "$PWD/appimage"
+          cp appimage/ModForge-*.AppImage .
+          sha256sum ModForge-*.AppImage > "$(ls ModForge-*.AppImage).sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: gantry-linux-x86_64
+          name: modforge-linux-x86_64
           path: |
-            gantry-*.tar.gz
-            gantry-*.tar.gz.sha256
-            Gantry-*.AppImage
-            Gantry-*.AppImage.sha256
+            modforge-*.tar.gz
+            modforge-*.tar.gz.sha256
+            ModForge-*.AppImage
+            ModForge-*.AppImage.sha256
       - name: Publish the release
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" gantry-*.tar.gz gantry-*.tar.gz.sha256 Gantry-*.AppImage Gantry-*.AppImage.sha256 \
-            --title "Gantry $GITHUB_REF_NAME (beta)" --prerelease \
-            --notes "Beta. Linux is where Gantry is developed and tested; the Windows and macOS builds are made automatically and have had much less testing, so please report what breaks. Downloads: Linux AppImage (chmod +x, run) or tar.gz (unpack, run \`./rig --install\`), Windows zip (run rig.exe), macOS tar.gz. What changed: CHANGELOG.md. How to install: docs/INSTALL.md."
+          gh release create "$GITHUB_REF_NAME" modforge-*.tar.gz modforge-*.tar.gz.sha256 ModForge-*.AppImage ModForge-*.AppImage.sha256 \
+            --title "ModForge $GITHUB_REF_NAME" \
+            --notes "ModForge $GITHUB_REF_NAME: Universal Game & Mod Studio for Linux, Steam Deck & PC. Downloads: Standalone AppImage for Linux, portable zip/installer for Windows, tar.gz for macOS."

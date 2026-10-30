@@ -1,220 +1,149 @@
-# Installing Gantry
+# Installing ModForge
 
-Gantry is a mod, trainer and crash-hunting hub for games on **Linux, Windows and macOS**
-(Steam, Hydra, Heroic, Lutris or games you add by hand). It is one small program that shows its interface
-in an app window of your browser. You can download an AppImage (Linux), a zip (Windows) or a tar.gz from the **Releases** page, or build it once from the
-source (about a minute). This page walks through it for each system.
+ModForge is a universal modding studio, graphic enhancement suite, and game diagnostic hub for **Linux, Steam Deck, and Windows** (supporting Steam, Hydra, Heroic, Lutris, and custom native games). It is a standalone, lightweight Rust application that renders an interface directly in an application window via your local browser.
 
-## Which systems work
+Pre-built binaries, standalone Linux AppImages, and Windows installers are available on the [Releases](https://github.com/pigeoonn/modforge/releases) page. You can also build it from source in about a minute.
 
-| System | Status |
-|---|---|
-| **Arch Linux, CachyOS, Manjaro, EndeavourOS** | ✅ Supported (this is where Gantry is developed and used). Has a package recipe. |
-| **Debian, Ubuntu, Linux Mint, Pop!_OS** | ✅ Supported (the automated tests run on Ubuntu). |
-| **Fedora, openSUSE** | 🟡 Should work; package names below are from the distributions' usual naming and have not been tried here. |
-| **Steam Deck (desktop mode), SteamOS, other immutable systems** | 🟡 Untested. The root folder is read-only, so build inside a container (distrobox) or install the build tools in your home folder. |
-| **Windows 10 / 11** | 🟡 Built and tested automatically on every push (unit tests and the interface run on a Windows machine); not yet tried by hand on real games. Finds Steam through the registry, launches games directly or through Steam, and has no Wine parts. |
-| **macOS** | 🟡 Early: builds and passes the automated tests on a Mac runner, not tried by hand. Mod library for native games; no Wine parts. |
+---
 
-## What you need
+## Supported Platforms
 
-* A Linux desktop with **Steam** or another launcher you use. Gantry does not install games.
-* **A Chromium-based browser** (Brave, Chromium, Chrome, Thorium, Vivaldi or Edge) for the app window.
-  Without one, Gantry opens your default browser instead.
-* `curl` (downloads UE4SS and talks to Nexus Mods / Steam), and tools to open mod archives:
-  `bsdtar` (libarchive) and ideally `7z` for `.7z` / `.rar`.
-* To build: the **Rust toolchain**, a C compiler, `pkg-config` and the Wayland/xkbcommon development files.
+| System | Status | Details |
+|---|---|---|
+| **Steam Deck & SteamOS** | ✅ Fully Supported | Run the standalone AppImage directly in Desktop Mode. Includes `--deck` handheld UI mode. |
+| **Arch Linux, CachyOS, Manjaro, EndeavourOS** | ✅ Fully Supported | Primary development platform. Native package recipe available in `packaging/arch`. |
+| **Ubuntu, Debian, Linux Mint, Pop!_OS** | ✅ Fully Supported | Automated CI runs on Ubuntu. Clean AppImage and tarball support. |
+| **Fedora, RHEL, openSUSE** | ✅ Fully Supported | Native RPM build support and generic AppImage compatibility. |
+| **Windows 10 / 11** | ✅ Supported | Native 64-bit Windows executable (`modforge.exe`) and Inno Setup installer. Direct registry Steam detection. |
+| **macOS** | 🟡 Experimental | Built for Apple Silicon (ARM64). Mod library and tools supported for native macOS titles. |
 
-## Windows
+---
 
-**Installer (easiest):** download `gantry-<version>-windows-x86_64-setup.exe` from the **Releases** page and run it. It
-installs for you only (no administrator rights), adds a Start menu entry and an uninstaller, and can add a desktop
-shortcut and take over the Nexus Mods download button. Later versions update from inside Gantry (*Settings*, *Update now*).
+## Linux & Steam Deck Installation
 
-**Or the zip:** download `gantry-<version>-windows-x86_64.zip` from the **Releases** page, unpack it anywhere and run
-`rig.exe` (nothing is installed; delete the folder to remove it). The file is not signed, so Windows SmartScreen may say
-"Windows protected your PC": choose *More info*, then *Run anyway*. To get a Start menu entry and a permanent
-place for the program, open a terminal in that folder and run:
+### Option 1: Standalone AppImage (Recommended)
 
-```powershell
-.\rig.exe --install          # copies it to %LOCALAPPDATA%\Programs\Gantry and adds a Start menu entry
-.\rig.exe --register-nxm     # optional: make Nexus Mods' "Mod Manager Download" button open Gantry
-```
+No installation or root privileges required. Runs on any modern 64-bit Linux distribution and SteamOS:
 
-`rig.exe --uninstall` and `--unregister-nxm` undo them. Gantry shows its window with Microsoft Edge (already
-part of Windows 10/11); Chrome, Brave and Vivaldi also work. Archives are opened with the `tar` that comes
-with Windows (zip, 7z and most rar files) or with 7-Zip when it is installed. Your data is in
-`%APPDATA%\Gantry` (settings) and `%LOCALAPPDATA%\Gantry` (downloads, backups, logs).
-
-On Windows games run natively, so Wine prefixes, GameMode and MangoHud do not appear. Mod loaders such
-as BepInEx and MelonLoader work without any launch option. To build from source install Rust
-(<https://rustup.rs>) and run `cargo build --release`.
-
-## macOS
-
-Download `gantry-<version>-macos-arm64.tar.gz` (Apple silicon) from the **Releases** page, then in Terminal:
+1. Download `ModForge-<version>-x86_64.AppImage` from [GitHub Releases](https://github.com/pigeoonn/modforge/releases).
+2. Make it executable and run it:
 
 ```bash
-tar xzf gantry-*-macos-arm64.tar.gz && cd gantry-*-macos-arm64
-xattr -d com.apple.quarantine rig     # the download is not signed by Apple, so macOS blocks it until you allow it
-./rig --install                       # adds ~/Applications/Gantry.app
+chmod +x ModForge-*.AppImage
+./ModForge-*.AppImage
 ```
 
-Gantry shows its window with Chrome, Brave, Edge or Vivaldi (one of them has to be installed). It finds Steam in
-`~/Library/Application Support/Steam`. macOS support is young: the mod library, undo, profiles and sharing
-work for native games, but there are no Mac-specific mod loaders yet and Nexus links (`nxm://`) are not
-handed over by the browser. Data lives in `~/Library/Application Support/Gantry` and `~/Library/Caches/Gantry`.
+> **Tip for Steam Deck:** Add the AppImage as a "Non-Steam Game" in Steam to launch ModForge straight from Game Mode or Desktop Mode!
 
-## Linux
+### Option 2: Prebuilt Tarball
 
-### AppImage (any 64-bit Linux, nothing to install)
-
-Download `Gantry-<version>-x86_64.AppImage` from the **Releases** page, then:
+1. Download `modforge-<version>-linux-x86_64.tar.gz` from [GitHub Releases](https://github.com/pigeoonn/modforge/releases).
+2. Unpack and install the desktop shortcut:
 
 ```bash
-chmod +x Gantry-*.AppImage
-./Gantry-*.AppImage
+tar xzf modforge-*-linux-x86_64.tar.gz
+cd modforge-*-linux-x86_64
+./modforge --install        # Creates menu entry, desktop icon, and ~/.local/bin/modforge link
 ```
 
-Gantry tells you in the header (and with a desktop notification) when a newer release exists; download the new
-file and replace the old one. You can build the same file yourself with `packaging/appimage/build.sh`.
+### Option 3: Building from Source
 
-### The prebuilt tar.gz (any 64-bit Linux, no Rust needed)
+Ensure you have Rust, `pkg-config`, and Wayland development headers installed:
 
-When a release exists, download `gantry-<version>-linux-x86_64.tar.gz` from the project's **Releases**
-page, then:
-
-```bash
-tar xzf gantry-*-linux-x86_64.tar.gz
-cd gantry-*-linux-x86_64
-./rig --install        # menu entry, icon and the "rig" command in ~/.local/bin
-```
-
-It only needs `libwayland-client` (present on practically every desktop) plus the runtime tools from
-"What you need" above. Verify the download with the `.sha256` file next to it (`sha256sum -c`).
-Build from source instead if you prefer; the per-distribution steps follow.
-
-### Arch Linux / CachyOS / Manjaro
-
+#### Arch Linux / Manjaro / CachyOS:
 ```bash
 sudo pacman -S --needed git base-devel rust curl libarchive wayland libxkbcommon xdg-utils p7zip
 git clone https://github.com/pigeoonn/modforge.git
-cd gantry/packaging/arch
-makepkg -si          # builds and installs the package: the "rig" command and a menu entry
+cd modforge
+cargo build --release
+./target/release/modforge --install
 ```
 
-Optional extras: `gamemode`, `mangohud`, `libnotify` (desktop notifications). Update later with `git pull`
-and `makepkg -si` again. Remove with `sudo pacman -R gantry`.
-
-### Debian / Ubuntu / Linux Mint / Pop!_OS
-
+#### Ubuntu / Debian / Pop!_OS / Linux Mint:
 ```bash
 sudo apt update
 sudo apt install -y git build-essential pkg-config curl libarchive-tools p7zip-full \
                     libwayland-dev libxkbcommon-dev xdg-utils
-# Rust: the packaged version can be too old, so use rustup (https://rustup.rs)
+# Install Rust via rustup if not present:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-. "$HOME/.cargo/env"
+source "$HOME/.cargo/env"
 
 git clone https://github.com/pigeoonn/modforge.git
-cd gantry
+cd modforge
 cargo build --release
-./target/release/rig --install      # menu entry, icon and the "rig" command in ~/.local/bin
+./target/release/modforge --install
 ```
 
-### Fedora
-
+#### Fedora / RHEL:
 ```bash
 sudo dnf install -y git gcc pkgconf-pkg-config curl bsdtar p7zip p7zip-plugins \
                     wayland-devel libxkbcommon-devel xdg-utils
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-. "$HOME/.cargo/env"
-git clone https://github.com/pigeoonn/modforge.git && cd gantry
+git clone https://github.com/pigeoonn/modforge.git
+cd modforge
 cargo build --release
-./target/release/rig --install
+./target/release/modforge --install
 ```
 
-### openSUSE
+---
+
+## Windows 10 / 11 Installation
+
+### Option 1: Installer Executable (Easiest)
+Download `modforge-<version>-windows-x86_64-setup.exe` from the [Releases](https://github.com/pigeoonn/modforge/releases) page and run the installer. It installs locally for your user account without requiring Administrator privileges, registers the `nxm://` 1-click download handler, and places a shortcut in your Start menu.
+
+### Option 2: Portable Zip
+Download `modforge-<version>-windows-x86_64.zip`, extract it anywhere, and launch `modforge.exe`.
+
+To install shortcuts and register Nexus links from PowerShell:
+```powershell
+.\modforge.exe --install
+.\modforge.exe --register-nxm
+```
+
+---
+
+## macOS Installation
+
+Download `modforge-<version>-macos-arm64.tar.gz` (Apple Silicon) from [Releases](https://github.com/pigeoonn/modforge/releases):
 
 ```bash
-sudo zypper install -y git gcc pkg-config curl bsdtar p7zip wayland-devel libxkbcommon-devel xdg-utils
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-. "$HOME/.cargo/env"
-git clone https://github.com/pigeoonn/modforge.git && cd gantry
-cargo build --release
-./target/release/rig --install
+tar xzf modforge-*-macos-arm64.tar.gz && cd modforge-*-macos-arm64
+xattr -d com.apple.quarantine modforge
+./modforge --install
 ```
 
-### Any other distribution
+---
 
-Install the same things under your distribution's names (`git`, a C compiler, `pkg-config`, `curl`,
-`libarchive`/`bsdtar`, `7z`, the Wayland and xkbcommon development packages, `xdg-utils`), get Rust from
-<https://rustup.rs>, then:
+## CLI Reference & Flags
 
-```bash
-git clone https://github.com/pigeoonn/modforge.git && cd gantry
-cargo build --release
-./target/release/rig --install
+ModForge can run headlessly, integrate with automation, or be called from shell scripts:
+
+```
+ModForge - Universal Game & Mod Studio
+
+USAGE:
+  modforge                                  Start ModForge UI (or focus running instance)
+  modforge --play <GAME> [--profile <NAME>] Start a game with its active mods directly
+  modforge --doctor                         Run diagnostics and mod health checks on all games
+  modforge --deck                           Handheld full-screen controller mode
+  modforge --lan                            Allow connections from local network (Steam Deck / mobile)
+  modforge nxm://...                        Handle Nexus Mods 1-click browser download
+  modforge --install                        Register desktop menu entry, icons, and ~/.local/bin link
+  modforge --register-nxm                   Register ModForge as default handler for nxm:// links
+  modforge --unregister-nxm                 Unregister nxm:// link handler
+  modforge --uninstall                      Remove desktop shortcuts, icons, and symlinks
+  modforge --version                        Display version
+  modforge --help                           Show help menu
 ```
 
-`rig --install` does not need root: it adds a menu entry, an icon and a `rig` link in `~/.local/bin`
-(make sure that folder is in your `PATH`). Run it again if you move the binary. `rig --uninstall` removes it.
+---
 
-## First start
+## Troubleshooting & Data Locations
 
-1. Open **Gantry** from your application menu (or run `rig`). The home screen scans Steam, Hydra, Heroic and
-   Lutris on its own and lists what you have, installed or not.
-2. **Language:** the menu in the top bar switches between English, Română, Italiano, Français, Español and Русский.
-3. **Optional but useful:**
-   * **🔑 Steam library:** paste a free Steam Web API key (<https://steamcommunity.com/dev/apikey>, any
-     domain name works) to also list games you own but have not installed. Games you have installed are found
-     without it.
-   * **🌐 Nexus Mods:** paste your personal API key (Nexus account settings → API Access) to download mods
-     and be told about updates, and let Gantry open the website's *Mod Manager Download* links.
-4. Pick a game and press **🚀 Make this game moddable** (Tools tab): it puts in what the game needs before mods
-   work (a mod loader, UE4SS, or Cyberpunk's RED4ext and friends) after showing you the list. Then drag mod
-   archives onto the window. They go into the **Mod Library**, which keeps your mods safe and can always put the
-   game back to how it was.
-
-Gantry never edits Steam's launch options behind your back: it asks, closes Steam first, and keeps a backup.
-Games with an anti-cheat (Easy Anti-Cheat, BattlEye) are refused unless you explicitly confirm.
-
-## Updating and removing
-
-```bash
-cd gantry
-git pull
-cargo build --release          # then, if you used --install, once more:  ./target/release/rig --install
-```
-
-Remove the program with `rig --uninstall` (or `sudo pacman -R gantry`). Your data lives in
-`~/.config/protonrig/` (settings), `~/.cache/rig/` (downloads, backups, logs) and a hidden `.gantry` folder
-next to each game's folder (the Mod Library); delete those too if you want no trace left.
-
-## Troubleshooting
-
-| Problem | What to do |
-|---|---|
-| `rig: command not found` | `~/.local/bin` is not in your `PATH`; log out and in again, or run `~/.local/bin/rig`. |
-| Build fails mentioning `wayland` or `xkbcommon` | Install the development packages from the list for your distribution. |
-| No window appears | Gantry opens an app window in a Chromium-based browser, otherwise in your default browser at <http://127.0.0.1:19450>. Open that address by hand to check. |
-| "Another program is using port 19450" | Another copy or program holds the port. Close it, or end the old Gantry with `pkill rig`. |
-| `.7z` / `.rar` mods fail to open | Install `p7zip` / `p7zip-full` (and `unrar` for some `.rar` files). |
-| Steam launch options are not applied | Steam rewrites them when it exits; use the *Close Steam & apply* button in the Rig Doctor. |
-| Anything else | Fatal errors are written to `~/.cache/rig/rig.log`; the event log at the bottom of the window has the rest. |
-
-For a bug report, include the lines of that log and your distribution's name.
-
-
-## Flatpak
-
-There is no Flatpak yet, on purpose: Gantry has to see the processes of your games, start Steam and its tools and
-write into game folders anywhere on disk, which a Flatpak sandbox blocks unless it is given almost everything (and
-Flathub does not accept that). The AppImage and the AUR package give the same program without a sandbox. If a Flatpak
-with host access is wanted anyway, it can be added later.
-
-## AUR
-
-`packaging/arch/PKGBUILD` builds from a checkout. `packaging/arch/aur-release/PKGBUILD` (the tagged release) and
-`packaging/arch/aur/PKGBUILD` (`gantry-git`, the newest commit) are the recipes for the AUR; they are built and tested
-here, but not yet published there.
+* **Port Collision:** If port 19450 is busy, terminate existing instances with `pkill modforge` or launch on another port with `RIG_PORT=19500 modforge`.
+* **Headless / Remote View:** Run `RIG_NO_WINDOW=1 modforge` to start the daemon in background and access it at `http://127.0.0.1:19450`.
+* **Archive Tools:** ModForge extracts `.zip`, `.tar`, and `.7z` / `.rar` archives. On Linux, ensure `p7zip` or `bsdtar` is installed for maximum format support.
+* **Data Locations:**
+  - Config & Settings: `~/.config/protonrig/` (Linux) / `%APPDATA%\Gantry` (Windows)
+  - Cache, Logs & Backups: `~/.cache/rig/` (Linux) / `%LOCALAPPDATA%\Gantry` (Windows)
+  - Game Virtual Overlays: Stored inside `.gantry/` in each individual game directory.

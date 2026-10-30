@@ -4,7 +4,7 @@ labels: [bug]
 body:
   - type: input
     id: version
-    attributes: { label: Gantry version (Settings) and system }
+    attributes: { label: ModForge version (Settings) and system }
     validations: { required: true }
   - type: input
     id: game
